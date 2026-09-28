@@ -1,0 +1,7 @@
+{
+  "case-classifier-v1": {
+    "sha256": "ba530b3adeb983d8c73e1f05b471e5a757b76daefbac0b014fba0ae19aa01d0f",
+    "frozenAt": "2026-09-28",
+    "note": "Frozen before any held-out evaluation. Changes require case-classifier-v2.md."
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "meta": {
+    "set": "example",
+    "heldOut": false,
+    "authoredBy": "SCHEMA EXAMPLE ONLY — not an evaluation set",
+    "authoredAt": "2026-09-28",
+    "warning": "Copy this shape to evaluation/heldout-cases.json. Replace the cases with independently authored ones and set meta.set = \"heldout\", meta.heldOut = true."
+  },
+  "cases": [
+    {
+      "id": "ho-001",
+      "message": "<buyer reply, verbatim>",
+      "messageTimestamp": "2026-10-06T06:00:00.000Z",
+      "optionalSupportingEvidence": [{ "type": "IMS_IMPORT", "text": "IMS action by recipient: Rejected · Remark: ..." }],
+      "expectedState": "PAPERWORK_BLOCKED",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "expectedConfidenceBand": "HIGH",
+      "invoiceOutstanding": 200000,
+      "language": "HINGLISH",
+      "notes": "Why this label is correct"
+    },
+    {
+      "id": "ho-002",
+      "message": "<buyer reply with a relative date>",
+      "messageTimestamp": "2026-10-08T12:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": { "type": "RELATIVE_DATE", "normalizedDate": "2026-10-12" },
+      "temporalCategory": "WEEKDAY",
+      "language": "EN",
+      "notes": "Resolve against messageTimestamp in Asia/Kolkata"
+    }
+  ]
+}

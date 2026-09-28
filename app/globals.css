@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-ink: #0b1b3f;
+  --color-ink-2: #3c4a66;
+  --color-ink-3: #6b7792;
+  --color-line: #e4e8f0;
+  --color-line-2: #eef1f6;
+  --color-canvas: #f6f8fb;
+  --color-brand: #2b6ff5;
+  --color-brand-600: #1f5ad6;
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dce8ff;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-feature-settings: "tnum" 1, "cv11" 1;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+}
+
+::selection {
+  background: var(--color-brand-100);
+}
+
+@keyframes flash-in {
+  from { background-color: #fff7d6; }
+  to { background-color: transparent; }
+}
+.flash { animation: flash-in 1.6s ease-out; }

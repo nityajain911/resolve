@@ -1,0 +1,670 @@
+{
+  "meta": {
+    "set": "development",
+    "heldOut": false,
+    "authoredBy": "Claude Code (while building the demo classifier and prompt v1)",
+    "authoredAt": "2026-09-28",
+    "warning": "NOT HELD OUT. These cases were written and used while developing the parser and prompt. Passing them says nothing about generalisation."
+  },
+  "cases": [
+    {
+      "id": "dev-01",
+      "message": "Monday tak kar denge",
+      "messageTimestamp": "2026-09-24T09:40:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-09-28"
+      },
+      "notes": "Thu message → coming Monday",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "WEEKDAY"
+    },
+    {
+      "id": "dev-02",
+      "message": "somvar ko payment ho jayega",
+      "messageTimestamp": "2026-09-23T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-09-28"
+      },
+      "notes": "",
+      "language": "HI",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "WEEKDAY"
+    },
+    {
+      "id": "dev-03",
+      "message": "Friday tak transfer kar denge",
+      "messageTimestamp": "2026-09-25T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AMBIGUOUS",
+        "confidenceBand": "NEEDS_REVIEW"
+      },
+      "notes": "Sent on a Friday: today or next Friday?",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "WEEKDAY"
+    },
+    {
+      "id": "dev-04",
+      "message": "will pay on Wednesday",
+      "messageTimestamp": "2026-09-21T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-09-23"
+      },
+      "notes": "",
+      "language": "EN",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "WEEKDAY"
+    },
+    {
+      "id": "dev-05",
+      "message": "kal afternoon",
+      "messageTimestamp": "2026-09-25T04:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-09-26"
+      },
+      "notes": "Short reply to 'when will you pay?'",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "TOMORROW_KAL"
+    },
+    {
+      "id": "dev-06",
+      "message": "kal tak NEFT kar dunga",
+      "messageTimestamp": "2026-09-30T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-10-01"
+      },
+      "notes": "kal crosses month boundary",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "MONTH_BOUNDARY"
+    },
+    {
+      "id": "dev-07",
+      "message": "Kal payment kar diya tha, check karo",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "PAID_UNMATCHED",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-09-21"
+      },
+      "notes": "Past tense → kal = yesterday; payment claim",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "TOMORROW_KAL"
+    },
+    {
+      "id": "dev-08",
+      "message": "tomorrow EOD pakka",
+      "messageTimestamp": "2026-09-24T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-09-25"
+      },
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "TOMORROW_KAL"
+    },
+    {
+      "id": "dev-09",
+      "message": "parso kar dunga",
+      "messageTimestamp": "2026-09-24T12:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-09-26"
+      },
+      "notes": "Future tense resolves parso forward",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "PARSO"
+    },
+    {
+      "id": "dev-10",
+      "message": "parso",
+      "messageTimestamp": "2026-09-21T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AMBIGUOUS",
+        "confidenceBand": "NEEDS_REVIEW"
+      },
+      "notes": "No tense marker",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "PARSO"
+    },
+    {
+      "id": "dev-11",
+      "message": "parso bola tha accounts ne",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AMBIGUOUS",
+        "confidenceBand": "NEEDS_REVIEW"
+      },
+      "notes": "Past-tense reference, not a promise",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "PARSO"
+    },
+    {
+      "id": "dev-12",
+      "message": "15 ke baad clear karenge",
+      "messageTimestamp": "2026-09-21T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AFTER_DATE",
+        "lowerBound": "2026-10-15"
+      },
+      "notes": "Not an exact PTP date; rolls to next month",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "AFTER_15TH"
+    },
+    {
+      "id": "dev-13",
+      "message": "after the 15th we will release",
+      "messageTimestamp": "2026-09-10T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AFTER_DATE",
+        "lowerBound": "2026-09-15"
+      },
+      "notes": "",
+      "language": "EN",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "AFTER_15TH"
+    },
+    {
+      "id": "dev-14",
+      "message": "₹90K aaj, baaki 15 ke baad",
+      "messageTimestamp": "2026-09-25T05:30:00.000Z",
+      "expectedState": "CASH_CONSTRAINED",
+      "expectedExtractedAmounts": [
+        90000,
+        175500
+      ],
+      "expectedTemporalExpression": {
+        "type": "AFTER_DATE",
+        "lowerBound": "2026-10-15"
+      },
+      "notes": "Hero cash case",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "AFTER_15TH",
+      "invoiceOutstanding": 265500
+    },
+    {
+      "id": "dev-15",
+      "message": "next Friday payment release karenge",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AMBIGUOUS",
+        "confidenceBand": "NEEDS_REVIEW"
+      },
+      "notes": "Tue message: this week's or next week's Friday",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "NEXT_FRIDAY"
+    },
+    {
+      "id": "dev-16",
+      "message": "next Friday",
+      "messageTimestamp": "2026-09-26T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-10-02"
+      },
+      "notes": "Sat message: next Friday is in the following week",
+      "language": "EN",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "NEXT_FRIDAY"
+    },
+    {
+      "id": "dev-17",
+      "message": "next friday tak",
+      "messageTimestamp": "2026-09-27T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-10-02"
+      },
+      "notes": "Sunday message; ISO week boundary",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "NEXT_FRIDAY"
+    },
+    {
+      "id": "dev-18",
+      "message": "month end tak ho jayega",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "EXACT_DATE",
+        "normalizedDate": "2026-09-30"
+      },
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "MONTH_BOUNDARY"
+    },
+    {
+      "id": "dev-19",
+      "message": "5 Oct ko NEFT karenge",
+      "messageTimestamp": "2026-09-30T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "EXACT_DATE",
+        "normalizedDate": "2026-10-05"
+      },
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "EXPLICIT_DATE"
+    },
+    {
+      "id": "dev-20",
+      "message": "31 tak kar denge",
+      "messageTimestamp": "2026-09-21T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AMBIGUOUS",
+        "confidenceBand": "NEEDS_REVIEW"
+      },
+      "notes": "September has no 31st",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "MONTH_BOUNDARY"
+    },
+    {
+      "id": "dev-21",
+      "message": "2 tareekh ko kar denge",
+      "messageTimestamp": "2026-09-28T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "EXACT_DATE",
+        "normalizedDate": "2026-10-02"
+      },
+      "notes": "Day already passed this month → next month",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "MONTH_BOUNDARY"
+    },
+    {
+      "id": "dev-22",
+      "message": "5 Jan tak",
+      "messageTimestamp": "2026-12-26T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "EXACT_DATE",
+        "normalizedDate": "2027-01-05"
+      },
+      "notes": "Year boundary",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "MONTH_BOUNDARY"
+    },
+    {
+      "id": "dev-23",
+      "message": "Monday tak",
+      "messageTimestamp": "2026-09-25T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-09-28"
+      },
+      "notes": "Friday → Monday across the weekend",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "WEEKEND_BOUNDARY"
+    },
+    {
+      "id": "dev-24",
+      "message": "weekend tak kar denge",
+      "messageTimestamp": "2026-09-23T05:30:00.000Z",
+      "expectedState": "PROMISE_TO_PAY",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "DATE_RANGE",
+        "upperBound": "2026-09-27"
+      },
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "temporalCategory": "WEEKEND_BOUNDARY"
+    },
+    {
+      "id": "dev-25",
+      "message": "weekend ke baad dekhte hain",
+      "messageTimestamp": "2026-09-24T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AFTER_DATE",
+        "lowerBound": "2026-09-27"
+      },
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "WEEKEND_BOUNDARY"
+    },
+    {
+      "id": "dev-26",
+      "message": "Saturday ko kar denge",
+      "messageTimestamp": "2026-09-26T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AMBIGUOUS",
+        "confidenceBand": "NEEDS_REVIEW"
+      },
+      "notes": "Sent on Saturday",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "WEEKEND_BOUNDARY"
+    },
+    {
+      "id": "dev-27",
+      "message": "payment jaldi kar denge",
+      "messageTimestamp": "2026-09-24T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "AMBIGUOUS",
+        "confidenceBand": "NEEDS_REVIEW"
+      },
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "VAGUE"
+    },
+    {
+      "id": "dev-28",
+      "message": "next week pakka",
+      "messageTimestamp": "2026-09-23T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "DATE_RANGE",
+        "lowerBound": "2026-09-28",
+        "upperBound": "2026-10-04",
+        "confidenceBand": "NEEDS_REVIEW"
+      },
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW",
+      "temporalCategory": "VAGUE"
+    },
+    {
+      "id": "dev-29",
+      "message": "GSTIN galat hai, accounts reject kar raha hai",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "Hero GST case with IMS corroboration",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "optionalSupportingEvidence": [
+        {
+          "type": "IMS_IMPORT",
+          "text": "IMS action by recipient: Rejected · Remark: Incorrect GSTIN"
+        }
+      ]
+    },
+    {
+      "id": "dev-30",
+      "message": "PO number nahi hai invoice pe",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-31",
+      "message": "Please share the signed delivery challan, GRN is pending",
+      "messageTimestamp": "2026-09-23T05:30:00.000Z",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "EN",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-32",
+      "message": "invoice format galat hai",
+      "messageTimestamp": "2026-09-21T05:30:00.000Z",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-33",
+      "message": "gst no glt h",
+      "messageTimestamp": "2026-09-24T05:30:00.000Z",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "Spelling variants",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-34",
+      "message": "Accounts ne park kiya, PO mismatch",
+      "messageTimestamp": "2026-09-23T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "Paperwork or quantity dispute",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW"
+    },
+    {
+      "id": "dev-35",
+      "message": "GST bhi galat hai aur 20 boxes damaged aaye",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "Paperwork + dispute",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW"
+    },
+    {
+      "id": "dev-36",
+      "message": "on hold hai abhi",
+      "messageTimestamp": "2026-09-24T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "Hold without reason",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW"
+    },
+    {
+      "id": "dev-37",
+      "message": "40 cartons damaged aaye the",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "COMMERCIAL_DISPUTE",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-38",
+      "message": "₹50K ka maal damaged tha, baaki ₹1.5L release kar denge",
+      "messageTimestamp": "2026-09-24T05:30:00.000Z",
+      "expectedState": "COMMERCIAL_DISPUTE",
+      "expectedExtractedAmounts": [
+        50000,
+        150000
+      ],
+      "expectedTemporalExpression": null,
+      "notes": "Partial dispute → split",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-39",
+      "message": "Rate galat lagaya hai",
+      "messageTimestamp": "2026-09-21T05:30:00.000Z",
+      "expectedState": "COMMERCIAL_DISPUTE",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-40",
+      "message": "Funds tight hai. 50% abhi kar dete hain, baaki 10 Oct tak",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "CASH_CONSTRAINED",
+      "expectedExtractedAmounts": [
+        50750
+      ],
+      "expectedTemporalExpression": {
+        "type": "EXACT_DATE",
+        "normalizedDate": "2026-10-10"
+      },
+      "notes": "Percentage of outstanding; remainder equals the immediate half",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "HIGH",
+      "invoiceOutstanding": 101500
+    },
+    {
+      "id": "dev-41",
+      "message": "thoda thoda karke denge",
+      "messageTimestamp": "2026-09-24T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW"
+    },
+    {
+      "id": "dev-42",
+      "message": "can pay 1.5L now, balance after 20th",
+      "messageTimestamp": "2026-09-24T05:30:00.000Z",
+      "expectedState": "CASH_CONSTRAINED",
+      "expectedExtractedAmounts": [
+        150000
+      ],
+      "expectedTemporalExpression": {
+        "type": "AFTER_DATE",
+        "lowerBound": "2026-10-20"
+      },
+      "notes": "Remainder equals immediate amount",
+      "language": "EN",
+      "expectedConfidenceBand": "HIGH",
+      "invoiceOutstanding": 300000
+    },
+    {
+      "id": "dev-43",
+      "message": "Payment done yesterday via NEFT, UTR 1234",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "PAID_UNMATCHED",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": {
+        "type": "RELATIVE_DATE",
+        "normalizedDate": "2026-09-21"
+      },
+      "notes": "",
+      "language": "EN",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-44",
+      "message": "TDS kaat ke bheja hai",
+      "messageTimestamp": "2026-09-21T05:30:00.000Z",
+      "expectedState": "NEEDS_REVIEW",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "HINGLISH",
+      "expectedConfidenceBand": "NEEDS_REVIEW"
+    },
+    {
+      "id": "dev-45",
+      "message": "ok",
+      "messageTimestamp": "2026-09-22T05:30:00.000Z",
+      "expectedState": "FOLLOW_UP_ACTIVE",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "EN",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-46",
+      "message": "Will check with accounts and revert",
+      "messageTimestamp": "2026-09-21T05:30:00.000Z",
+      "expectedState": "FOLLOW_UP_ACTIVE",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "EN",
+      "expectedConfidenceBand": "HIGH"
+    },
+    {
+      "id": "dev-47",
+      "message": "sorry missed it, will process",
+      "messageTimestamp": "2026-09-23T05:30:00.000Z",
+      "expectedState": "FOLLOW_UP_ACTIVE",
+      "expectedExtractedAmounts": [],
+      "expectedTemporalExpression": null,
+      "notes": "",
+      "language": "EN",
+      "expectedConfidenceBand": "HIGH"
+    }
+  ]
+}
