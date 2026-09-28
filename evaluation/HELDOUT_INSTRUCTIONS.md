@@ -20,6 +20,14 @@ A real held-out set must be authored **separately, after the prompt is frozen**.
    held-out cases. Any change → `case-classifier-v2.md` (never overwrite v1) and ideally a fresh held-out set.
 5. Label each case (expected state, amounts, temporal expression) **before** running the classifier.
 
+## Assisted drafting (optional)
+
+If you have no real messages yet: `npm run heldout:draft` asks a different model family
+(`qwen/qwen3.8-27b`) to draft candidates blind (no access to the prompt or development set). The
+drafts are **not** labelled truth: review and correct every label in
+`evaluation/heldout-candidates.json`, then `npm run heldout:promote -- --reviewed-by "Name"`.
+Do not share the candidates with the classifier developer before the evaluation has been run.
+
 ## Coverage required
 
 - Languages: English, Hindi, Hinglish; spelling errors; very short replies.

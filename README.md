@@ -40,7 +40,9 @@ and **Reset demo** to restore the seeded book, timers, approvals, simulated paym
 | `npm run lint` | ESLint |
 | `npm run build` | Production build |
 | `npm run eval -- --set dev` | Classifier regression on the development set (**not held out**) |
-| `npm run eval -- --set heldout [--provider live]` | Held-out evaluation, once `evaluation/heldout-cases.json` exists |
+| `npm run eval:live -- --set dev --publish` | Same cases through the live Groq model (needs `GROQ_API_KEY`); publishes a frozen report |
+| `npm run eval -- --set heldout --publish` / `npm run eval:live -- --set heldout --publish` | Held-out evaluation, once `evaluation/heldout-cases.json` exists |
+| `npm run heldout:draft` / `npm run heldout:promote -- --reviewed-by "Name"` | Blind candidate drafting by a different model, then human-reviewed promotion |
 
 ## Razorpay test mode
 
@@ -85,6 +87,8 @@ tests/         unit tests;  scripts/run-eval.ts  evaluation CLI
   It is deliberately imperfect: some invoices were paid or disputed with no observable signal.
 - The demo classifier was developed alongside the synthetic messages; the wrong-chase result
   measures the system design, not model accuracy.
+- A **real model** (`groq:openai/gpt-oss-120b`, frozen prompt v1) has been run on the development
+  set: 76.6% state accuracy, 3 high-risk errors (`evaluation/published/dev-live.json`). Not held out.
 - **No held-out accuracy is shown** until an independently authored held-out set is imported
   (see `evaluation/HELDOUT_INSTRUCTIONS.md`). Once a held-out set has been evaluated, changing
   the prompt requires a new version (`case-classifier-v2.md`) and ideally a fresh held-out set.

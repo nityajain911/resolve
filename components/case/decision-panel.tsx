@@ -10,6 +10,7 @@ import type { InvoiceCase, InvoiceState, ResolutionAction, WorldState } from "@/
 import { useResolve } from "@/lib/store";
 import { Button, Card, ConfidenceBadge, Eyebrow, PolicyBadge, SimLabel, StateBadge } from "../ui";
 import { ActionDrawer } from "./action-drawer";
+import { ReviewPanel } from "./review-panel";
 
 const OPEN: ResolutionAction["status"][] = ["PROPOSED", "REVIEW_REQUIRED", "BLOCKED"];
 
@@ -39,6 +40,17 @@ export function DecisionPanel({ world, c, onWhy }: { world: WorldState; c: Invoi
           )}
         </div>
         <p className="mt-3 text-[15px] leading-snug">{explanation}</p>
+        {c.assessments?.length ? (
+          <div className="mt-1.5 text-xs text-ink-3">
+            Evidence:{" "}
+            {c.assessments.at(-1)!.evidenceStrength === "CORROBORATED"
+              ? "corroborated by a second source"
+              : c.assessments.at(-1)!.evidenceStrength === "CONFLICTING"
+                ? "conflicting sources"
+                : "single source"}
+            {c.assessments.length > 1 && ` · assessment updated ${formatIst(c.assessments.at(-1)!.at)}`}
+          </div>
+        ) : null}
         <button className="mt-2 text-xs font-medium text-brand-600 hover:underline" onClick={() => onWhy(whyIds)}>
           Why? Show the evidence
         </button>
@@ -66,9 +78,6 @@ export function DecisionPanel({ world, c, onWhy }: { world: WorldState; c: Invoi
 function StateActions({ world, c, open }: { world: WorldState; c: InvoiceCase; open: (t: ResolutionAction["type"]) => ResolutionAction | undefined }) {
   const store = useResolve();
   const [drawer, setDrawer] = useState(false);
-  const [otherOpen, setOtherOpen] = useState(false);
-  const [note, setNote] = useState("");
-  const [ptpDate, setPtpDate] = useState("");
 
   switch (c.currentState) {
     case "PAID_UNMATCHED": {
@@ -186,7 +195,7 @@ function StateActions({ world, c, open }: { world: WorldState; c: InvoiceCase; o
           )}
           {plan?.status === "ACTIVE" && nextInst && (
             <div className="mt-3">
-              <Button variant="secondary" onClick={() => store.simulatePayment(c.id, nextInst.amount)}>Simulate payment received · {formatINR(nextInst.amount)}</Button>
+              <Button variant="secondary" onClick={() => store.simulatePayment(c.id, nextInst.amount, `pay:${nextInst.id}`)}>Simulate payment received · {formatINR(nextInst.amount)}</Button>
               <div className="mt-1 text-[11px] text-ink-3">Generates a clearly labelled simulated PAYMENT_EVENT — test payment completion may be unavailable on the account.</div>
             </div>
           )}
@@ -204,48 +213,24 @@ function StateActions({ world, c, open }: { world: WorldState; c: InvoiceCase; o
             {h.made > 0 ? <>Buyer kept <b>{h.kept} of {h.made}</b> previous promises. </> : "No promise history yet. "}
             Resolve recommends waiting until <b>{formatDate(p.promisedDate)}</b>.
           </p>
-          <div className="mt-2 text-sm text-ink-2">No buyer follow-up until {formatDate(p.promisedDate)}.</div>
+          <div className="mt-2 text-sm text-ink-2">
+            No buyer follow-up until <span className="num font-medium">{formatIst(c.followUpSuppressedUntil ?? p.deadlineAt)}</span>
+            <span className="text-ink-3"> ({c.followUpSuppressedReason ?? `${formatDate(p.promisedDate)} + grace`})</span>.
+          </div>
           <div className="mt-2 rounded-lg bg-canvas px-3 py-2 text-xs text-ink-2">
-            Timer re-checks payment at <span className="num font-medium">{formatIst(p.deadlineAt)}</span> (promised date + {world.policy.promiseGracePeriodHours}h grace). If still unpaid → follow-up resumes automatically.
+            At that moment a timer re-checks payment. If still unpaid → follow-up resumes automatically and the promise is recorded as broken.
           </div>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button onClick={() => store.advanceClock(new Date(new Date(p.deadlineAt).getTime() + 60000).toISOString())}>
               <FastForward className="h-4 w-4" aria-hidden /> Advance demo clock past deadline
             </Button>
-            <Button variant="secondary" onClick={() => store.simulatePayment(c.id, c.outstandingAmount)}>Simulate payment received</Button>
+            <Button variant="secondary" onClick={() => store.simulatePayment(c.id, c.outstandingAmount, `pay:${c.id}:${c.evidence.length}`)}>Simulate payment received</Button>
           </div>
         </Card>
       );
     }
-    case "NEEDS_REVIEW": {
-      const choose = (s: InvoiceState, opts?: { promiseDate?: string }) => store.classify(c.id, s, { note: note || undefined, ...opts });
-      return (
-        <Card className="border-dashed border-amber-400 p-4">
-          <div className="font-semibold">Needs review</div>
-          <div className="mt-1 text-sm text-ink-2">No buyer message will be sent until this is classified.</div>
-          {c.reviewCandidates?.length ? (
-            <div className="mt-2 text-xs text-ink-3">Could be: {c.reviewCandidates.map((s) => STATE_META[s].label).join(" · ")}</div>
-          ) : null}
-          <textarea className="mt-3 w-full rounded-md border border-line px-2 py-1.5 text-sm" rows={2} placeholder="Note for the audit trail (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Button onClick={() => choose("PAPERWORK_BLOCKED")}>Paperwork issue</Button>
-            <Button onClick={() => choose("COMMERCIAL_DISPUTE")}>Commercial dispute</Button>
-            <Button variant="secondary" onClick={() => setOtherOpen(!otherOpen)}>Other</Button>
-          </div>
-          {otherOpen && (
-            <div className="mt-2 space-y-2 rounded-lg border border-line p-3">
-              <Button size="sm" variant="secondary" onClick={() => choose("FOLLOW_UP_ACTIVE")}>No blocker — resume follow-up</Button>
-              <div className="flex items-center gap-2">
-                <input type="date" className="num rounded-md border border-line px-2 py-1 text-sm" value={ptpDate} onChange={(e) => setPtpDate(e.target.value)} />
-                <Button size="sm" variant="secondary" disabled={!ptpDate} onClick={() => choose("PROMISE_TO_PAY", { promiseDate: ptpDate })}>Promise to pay on date</Button>
-              </div>
-              <Button size="sm" variant="secondary" onClick={() => choose("CASH_CONSTRAINED")}>Cash constraint</Button>
-            </div>
-          )}
-          <div className="mt-2 text-[11px] text-ink-3">Your classification is recorded as a merchant override and added to the labelled review set. It does not retrain anything automatically.</div>
-        </Card>
-      );
-    }
+    case "NEEDS_REVIEW":
+      return <ReviewPanel world={world} c={c} />;
     case "COMMERCIAL_DISPUTE": {
       const a = open("CREATE_CHILD_INVOICE");
       return (

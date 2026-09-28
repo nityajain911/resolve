@@ -9,7 +9,7 @@ Fill in the bracketed parts; the pre-filled lines describe how this prototype wa
 
 ## What AI accelerated
 - Turning the product spec into a typed domain model, explicit state machine and policy engine.
-- Writing 58 unit tests covering transitions, policy gates, timers, temporal parsing, isolation and metrics.
+- Writing 90 unit tests covering transitions, policy gates, timers, temporal parsing, isolation and metrics.
 - Hinglish temporal/amount parsing rules and the development case set.
 - UI screens and documentation.
 

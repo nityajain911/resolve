@@ -35,7 +35,7 @@ export function Simulator({ c }: { c: InvoiceCase }) {
           <span className="text-xs text-ink-3">Simulated payment event (₹)</span>
           <input className="num mt-1 w-full rounded-md border border-line px-2 py-1.5 text-sm" inputMode="numeric" value={amt} placeholder={String(c.outstandingAmount)} onChange={(e) => setAmt(e.target.value.replace(/[^\d]/g, ""))} />
         </label>
-        <Button size="sm" variant="secondary" onClick={() => { simulatePayment(c.id, Number(amt || c.outstandingAmount)); setAmt(""); }}>
+        <Button size="sm" variant="secondary" onClick={() => { simulatePayment(c.id, Number(amt || c.outstandingAmount), `pay:${c.id}:${c.evidence.length}`); setAmt(""); }}>
           Simulate payment received
         </Button>
       </div>

@@ -74,7 +74,7 @@ export function SimLabel({ children, className }: { children: ReactNode; classNa
   );
 }
 
-export const EVIDENCE_ICON: Record<EvidenceType | "TIMER" | "TRANSITION" | "ACTION", { icon: LucideIcon; label: string }> = {
+export const EVIDENCE_ICON: Record<EvidenceType | "TIMER" | "TRANSITION" | "ACTION" | "ASSESSMENT", { icon: LucideIcon; label: string }> = {
   BUYER_MESSAGE: { icon: MessageSquare, label: "Message" },
   BUYER_EMAIL: { icon: Mail, label: "Email" },
   VOICE_NOTE_TRANSCRIPT: { icon: Mic, label: "Voice note" },
@@ -88,6 +88,7 @@ export const EVIDENCE_ICON: Record<EvidenceType | "TIMER" | "TRANSITION" | "ACTI
   TIMER: { icon: Timer, label: "Timer" },
   TRANSITION: { icon: RefreshCw, label: "State" },
   ACTION: { icon: Bot, label: "Action" },
+  ASSESSMENT: { icon: ShieldCheck, label: "Assessment" },
 };
 
 export function Button({

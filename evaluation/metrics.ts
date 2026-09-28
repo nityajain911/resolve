@@ -5,6 +5,7 @@
  * and ambiguous-expression routing are all reported separately.
  */
 import type { CaseClassifier, ClassifierInput } from "@/ai/classifier";
+import { temporalKind } from "@/domain/temporal-semantics";
 import type { CaseUnderstanding, InvoiceState, TemporalExpression } from "@/domain/types";
 import { errorRisk, RISK_WEIGHT, type RiskTier } from "./cost-matrix";
 import type { ExpectedTemporal, HeldoutCase, TemporalCategory } from "./types";
@@ -50,15 +51,22 @@ export function effectiveState(u: CaseUnderstanding): InvoiceState {
   return u.confidenceBand === "NEEDS_REVIEW" ? "NEEDS_REVIEW" : u.proposedState;
 }
 
+/**
+ * Temporal scoring by SEMANTIC KIND (EXACT / LOWER_BOUND / RANGE / AMBIGUOUS), not by label.
+ * EXACT_DATE and RELATIVE_DATE are both EXACT, so "Monday tak" labelled either way is scored on
+ * the resolved day. Ambiguity is scored as ambiguity (type AMBIGUOUS or band NEEDS_REVIEW).
+ * Defined before any held-out evaluation; see EVALUATION_PROTOCOL.md §5.
+ */
 export function temporalMatches(expected: ExpectedTemporal, predicted: TemporalExpression[]): boolean {
-  return predicted.some(
-    (p) =>
-      p.type === expected.type &&
-      (expected.normalizedDate === undefined || p.normalizedDate === expected.normalizedDate) &&
-      (expected.lowerBound === undefined || p.lowerBound === expected.lowerBound) &&
-      (expected.upperBound === undefined || p.upperBound === expected.upperBound) &&
-      (expected.confidenceBand === undefined || p.confidenceBand === expected.confidenceBand),
-  );
+  const ek = temporalKind({ type: expected.type, confidenceBand: expected.confidenceBand ?? "HIGH", normalizedDate: expected.normalizedDate ?? (expected.type === "EXACT_DATE" || expected.type === "RELATIVE_DATE" ? "?" : undefined) });
+  return predicted.some((p) => {
+    const pk = temporalKind(p);
+    if (pk !== ek) return false;
+    if (ek === "AMBIGUOUS") return true;
+    if (ek === "EXACT") return (p.normalizedDate ?? (p.lowerBound && p.lowerBound === p.upperBound ? p.lowerBound : undefined)) === expected.normalizedDate;
+    if (ek === "LOWER_BOUND") return p.lowerBound === expected.lowerBound;
+    return (expected.lowerBound === undefined || p.lowerBound === expected.lowerBound) && (expected.upperBound === undefined || p.upperBound === expected.upperBound);
+  });
 }
 
 function amountsMatch(expected: number[], predicted: CaseUnderstanding["extractedAmounts"]): boolean {
@@ -154,8 +162,22 @@ export function computeMetrics(preds: CasePrediction[]): ClassifierMetrics {
   };
 }
 
-export async function evaluateClassifier(cases: HeldoutCase[], classifier: CaseClassifier) {
+/**
+ * Provider failures (rate limit, API error, invalid output) are NOT predictions: they are
+ * excluded from every metric and reported separately as `providerErrors`.
+ */
+export async function evaluateClassifier(
+  cases: HeldoutCase[],
+  classifier: CaseClassifier,
+  onProgress?: (done: number, total: number, id: string, error?: string) => void,
+) {
   const predictions: CasePrediction[] = [];
-  for (const c of cases) predictions.push(scoreCase(c, await classifier.classify(toClassifierInput(c))));
-  return { predictions, metrics: computeMetrics(predictions) };
+  const providerErrors: { caseId: string; error: string }[] = [];
+  for (const [i, c] of cases.entries()) {
+    const u = await classifier.classify(toClassifierInput(c));
+    if (u.providerError) providerErrors.push({ caseId: c.id, error: u.providerError });
+    else predictions.push(scoreCase(c, u));
+    onProgress?.(i + 1, cases.length, c.id, u.providerError);
+  }
+  return { predictions, providerErrors, metrics: computeMetrics(predictions) };
 }

@@ -1,5 +1,5 @@
 import { STATE_META } from "./state-machine";
-import { addDays, daysBetween, istDate } from "./time";
+import { addDays, daysBetween, formatIst, istDate } from "./time";
 import { formatINR } from "./money";
 import type {
   ActionType,
@@ -46,6 +46,8 @@ export interface ProposedAction {
   immediateAmount?: number;
   /** Part payment / wait: the latest date in the proposed arrangement (YYYY-MM-DD). */
   finalDate?: string;
+  /** How finalDate was derived; a date proposed from a lower bound needs explicit confirmation. */
+  finalDateSource?: import("./types").DateSource;
   /** Any buyer-facing text Resolve would send. */
   buyerMessage?: string;
 }
@@ -151,6 +153,16 @@ export function evaluateAction(args: {
       !p.pauseAllAutomation,
     );
     // 6. Contact policy.
+    if (a.type === "SEND_REMINDER" && c.followUpSuppressedUntil) {
+      const active = new Date(now).getTime() < new Date(c.followUpSuppressedUntil).getTime();
+      add(
+        "FOLLOW_UP_SUPPRESSED",
+        active
+          ? `No follow-up until ${formatIst(c.followUpSuppressedUntil)}${c.followUpSuppressedReason ? ` (${c.followUpSuppressedReason})` : ""}`
+          : "Follow-up suppression window has ended",
+        !active,
+      );
+    }
     if (a.type === "SEND_REMINDER") {
       const recent = remindersInLast7Days(c, now);
       add(
@@ -175,6 +187,14 @@ export function evaluateAction(args: {
       imm >= p.minPartPaymentAmount,
     );
     add("PART_BELOW_OUTSTANDING", "Immediate amount is less than the outstanding balance", imm > 0 && imm < pay.outstandingAmount);
+    if (a.finalDate && a.finalDateSource === "PROPOSED_FROM_LOWER_BOUND") {
+      add(
+        "REMAINDER_DATE_CONFIRMED",
+        `Remainder date ${a.finalDate} was proposed from an "after" condition, not stated by the buyer — confirm it`,
+        false,
+        "REVIEW",
+      );
+    }
     if (a.finalDate) {
       const ext = daysBetween(istDate(now), a.finalDate);
       add(
@@ -227,6 +247,16 @@ function finish(checks: PolicyCheck[], p: MerchantPolicy, now: string): PolicyEv
     reasonCodes: failed.length ? failed.map((c) => c.code) : ["ALL_CHECKS_PASSED"],
     checks,
     policyVersion: policyVersion(p),
+    policySnapshot: {
+      reviewFirst: p.reviewFirst,
+      allowPartPayments: p.allowPartPayments,
+      minPartPaymentAmount: p.minPartPaymentAmount,
+      maxExtensionDays: p.maxExtensionDays,
+      reminderFrequencyCap: p.reminderFrequencyCap,
+      promiseGracePeriodHours: p.promiseGracePeriodHours,
+      pauseAllAutomation: p.pauseAllAutomation,
+      excludedBuyerIds: [...p.excludedBuyerIds],
+    },
     evaluatedAt: now,
   };
 }

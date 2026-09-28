@@ -80,7 +80,9 @@ export interface BankCreditData {
 
 export interface PaymentEventData {
   amount: number;
-  channel: "RAZORPAY_PAYMENT_LINK" | "RAZORPAY_PAYMENT" | "SIMULATED";
+  channel: "RAZORPAY_PAYMENT_LINK" | "RAZORPAY_PAYMENT" | "SIMULATED" | "MERCHANT_LEDGER";
+  /** Provider / ledger payment id — used to de-duplicate retried events. */
+  paymentId?: string;
   reference?: string;
   /** Payment events tied to an invoice reference are reconciled by construction. */
   reconciled: boolean;
@@ -164,10 +166,14 @@ export interface PromiseToPay {
   deadlineAt: string; // ISO: end of promised day + grace
 }
 
+/** Where an installment date came from. A lower bound ("after the 15th") is never silently an exact date. */
+export type DateSource = "EXACT" | "RANGE_UPPER_BOUND" | "PROPOSED_FROM_LOWER_BOUND" | "MESSAGE_DATE" | "MERCHANT_SET" | "MISSING";
+
 export interface Installment {
   id: string;
   amount: number;
   dueDate: string; // YYYY-MM-DD
+  dateSource: DateSource;
   status: "PENDING" | "PAID" | "MISSED";
   paymentLink?: PaymentLinkRecord;
   paidAt?: string;
@@ -234,6 +240,8 @@ export interface PolicyEvaluation {
   reasonCodes: string[];
   checks: PolicyCheck[];
   policyVersion: string;
+  /** Exact thresholds used for this evaluation (snapshotted with the action). */
+  policySnapshot: Pick<MerchantPolicy, "reviewFirst" | "allowPartPayments" | "minPartPaymentAmount" | "maxExtensionDays" | "reminderFrequencyCap" | "promiseGracePeriodHours" | "pauseAllAutomation" | "excludedBuyerIds">;
   evaluatedAt: string;
 }
 
@@ -313,6 +321,11 @@ export interface InvoiceCase {
   rejectedCreditIds?: string[];
   /** Candidate states when in NEEDS_REVIEW. */
   reviewCandidates?: InvoiceState[];
+  /** Explicit suppression window: no buyer follow-up before this instant (ISO). */
+  followUpSuppressedUntil?: string;
+  followUpSuppressedReason?: string;
+  /** Assessment snapshots: confidence / evidence strength can change without a state transition. */
+  assessments?: CaseAssessment[];
 
   isDemoHero?: boolean;
   demoLabel?: string;
@@ -373,8 +386,24 @@ export interface CaseUnderstanding {
   };
   evidenceUsed: string[];
   conciseExplanation: string;
+  /** Set when the provider failed (rate limit, API error, invalid output). Evaluation excludes these from accuracy. */
+  providerError?: string;
+  /** Set by the deterministic invariant layer, never by the model. */
+  validationIssues?: { code: string; message: string }[];
   provider: string; // e.g. "demo-lexicon-v1" or "groq:openai/gpt-oss-120b"
   promptVersion?: string;
+}
+
+export interface CaseAssessment {
+  id: string;
+  at: string;
+  kind: "INITIAL" | "CORROBORATED" | "UPDATED" | "INVARIANT_FAILED" | "CONFLICT";
+  state: InvoiceState;
+  confidenceBand: ConfidenceBand;
+  evidenceStrength: "SINGLE_SOURCE" | "CORROBORATED" | "CONFLICTING";
+  evidenceIds: string[];
+  summary: string;
+  provider?: string;
 }
 
 export interface ScheduledEvent {
@@ -415,6 +444,8 @@ export interface WorldState {
   bankFeed: BankFeedEntry[];
   idCounter: number;
   activity: { at: string; text: string }[];
+  /** Idempotency keys of commands already applied (retries / double clicks are no-ops). */
+  processedKeys: string[];
 }
 
 export interface BankFeedEntry {

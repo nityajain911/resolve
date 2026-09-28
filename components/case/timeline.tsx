@@ -5,14 +5,15 @@ import { ArrowRight, Timer } from "lucide-react";
 import { actionsFor } from "@/domain/engine";
 import { formatINR } from "@/domain/money";
 import { formatIst } from "@/domain/time";
-import type { Evidence, InvoiceCase, ResolutionAction, ScheduledEvent, StateTransition, WorldState } from "@/domain/types";
+import type { CaseAssessment, Evidence, InvoiceCase, ResolutionAction, ScheduledEvent, StateTransition, WorldState } from "@/domain/types";
 import { EVIDENCE_ICON, PolicyBadge, SimLabel, StateBadge } from "../ui";
 
 type Item =
   | { at: string; order: number; kind: "evidence"; ev: Evidence }
   | { at: string; order: number; kind: "transition"; t: StateTransition }
   | { at: string; order: number; kind: "action"; a: ResolutionAction; phase: "proposed" | "decided" }
-  | { at: string; order: number; kind: "timer"; tm: ScheduledEvent; phase: "scheduled" | "fired" };
+  | { at: string; order: number; kind: "timer"; tm: ScheduledEvent; phase: "scheduled" | "fired" }
+  | { at: string; order: number; kind: "assessment"; as: CaseAssessment };
 
 const ACTION_LABEL: Record<ResolutionAction["type"], string> = {
   MATCH_PAYMENT: "Match payment",
@@ -38,6 +39,10 @@ export function Timeline({ world, c, highlight, onWhy }: { world: WorldState; c:
     items.push({ at: a.createdAt, order: o++, kind: "action", a, phase: "proposed" });
     if (a.executedAt && a.executedAt !== a.createdAt) items.push({ at: a.executedAt, order: o++, kind: "action", a, phase: "decided" });
   }
+  for (const as of c.assessments ?? []) {
+    // The initial assessment is shown with its transition; later ones are separate audit events.
+    if (as.kind !== "INITIAL") items.push({ at: as.at, order: o++, kind: "assessment", as });
+  }
   for (const tm of world.timers.filter((t) => t.invoiceId === c.id)) {
     items.push({ at: tm.createdAt, order: o++, kind: "timer", tm, phase: "scheduled" });
     if (tm.firedAt) items.push({ at: tm.firedAt, order: o++, kind: "timer", tm, phase: "fired" });
@@ -57,7 +62,7 @@ export function Timeline({ world, c, highlight, onWhy }: { world: WorldState; c:
 }
 
 function Node({ it }: { it: Item }) {
-  const key = it.kind === "evidence" ? it.ev.type : it.kind === "transition" ? "TRANSITION" : it.kind === "timer" ? "TIMER" : "ACTION";
+  const key = it.kind === "evidence" ? it.ev.type : it.kind === "transition" ? "TRANSITION" : it.kind === "timer" ? "TIMER" : it.kind === "assessment" ? "ASSESSMENT" : "ACTION";
   const Icon = EVIDENCE_ICON[key].icon;
   return (
     <span
@@ -123,6 +128,23 @@ function render(it: Item, highlight: string[], onWhy: (ids: string[]) => void) {
         <div className="mt-1 text-sm text-ink-2">{t.humanReadableReason}</div>
         <button className="mt-1 text-xs font-medium text-brand-600 hover:underline" onClick={() => onWhy(t.evidenceIds)}>
           Why? Show evidence ({t.evidenceIds.length})
+        </button>
+      </div>
+    );
+  }
+  if (it.kind === "assessment") {
+    const a = it.as;
+    const tone = a.kind === "CORROBORATED" ? "border-emerald-200 bg-emerald-50/50" : a.kind === "INVARIANT_FAILED" || a.kind === "CONFLICT" ? "border-rose-200 bg-rose-50/50" : "border-line bg-white";
+    return (
+      <div className={clsx("rounded-lg border px-3 py-2", tone)}>
+        <Meta
+          at={a.at}
+          label="Assessment updated"
+          extra={<span>· no state change · {a.confidenceBand === "HIGH" ? "high confidence" : "needs review"} · evidence {a.evidenceStrength.toLowerCase().replace("_", " ")}</span>}
+        />
+        <div className="mt-1 text-sm text-ink-2">{a.summary}</div>
+        <button className="mt-1 text-xs font-medium text-brand-600 hover:underline" onClick={() => onWhy(a.evidenceIds)}>
+          Why? Show evidence ({a.evidenceIds.length})
         </button>
       </div>
     );

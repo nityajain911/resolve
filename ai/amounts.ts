@@ -19,6 +19,11 @@ const ROLE_WORDS: [AmountRole, RegExp][] = [
   ["UNDISPUTED", /\b(undisputed|release|clear|baaki ka|rest of)\b/],
 ];
 
+const IDENTIFIER_BEFORE =
+  /\b(utr|rrn|txn|transaction|trans|ref|reference|refno|a\/c|ac|acct|account|ifsc|gstin|gstn|gst|upi|vpa|cheque|chq|dd|invoice|inv|po|order|id|no|number)\b[\s.:#-]*(no\.?|number|id|#)?[\s.:#-]*[a-z]*$/;
+const MONEY_CONTEXT =
+  /\b(pay|paid|payment|amount|amt|rupees|rupaye|rupay|bhej|bheja|bhejenge|transfer|transferred|de|denge|dunga|dege|release|clear|balance|baaki|baki|abhi|aaj|now|remaining|due|outstanding|neft|rtgs|imps)\b/;
+
 function roleFor(clause: string): AmountRole {
   for (const [role, re] of ROLE_WORDS) if (re.test(clause)) return role;
   return "UNSPECIFIED";
@@ -32,6 +37,8 @@ function clauses(text: string): { start: number; end: number }[] {
   while ((m = re.exec(text))) {
     // don't split decimals like 1.5
     if (m[0] === "." && /\d/.test(text[m.index - 1] ?? "") && /\d/.test(text[m.index + 1] ?? "")) continue;
+    // don't split "rs.45000"
+    if (m[0] === "." && /\brs$/.test(text.slice(Math.max(0, m.index - 3), m.index))) continue;
     // don't split thousands separators like 2,40,000
     if (m[0] === "," && /\d/.test(text[m.index - 1] ?? "") && /\d/.test(text[m.index + 1] ?? "")) continue;
     out.push({ start: last, end: m.index });
@@ -49,20 +56,29 @@ export function extractAmounts(rawText: string, outstanding?: number): Extracted
     return text.slice(c.start, c.end);
   };
   const out: ExtractedAmount[] = [];
-  const re = /(₹|rs\.?|inr)?\s*(\d[\d,]*(?:\.\d+)?)\s*(crores?|cr|lakhs?|lacs?|lac|lk|l|thousand|hazaa?r|hajar|k)?\b/g;
+  // A number must START a token: "HDFCN52026091899" never yields an amount.
+  const re = /(₹|\brs\.?|\binr)?\s*(\d[\d,]*(?:\.\d+)?)\s*(crores?|cr|lakhs?|lacs?|lac|lk|l|thousand|hazaa?r|hajar|k)?(?![a-z0-9])/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     const [full, currency, num, unit] = m;
-    const before = text.slice(Math.max(0, m.index - 6), m.index);
-    if (/(inv|po|utr|#|no\.?|-)\s*$/.test(before)) continue; // invoice / PO / UTR numbers
+    const numStart = m.index + full.indexOf(num);
+    if (!currency && /[a-z0-9.,]/.test(text[numStart - 1] ?? "")) continue;
+    const before = text.slice(Math.max(0, numStart - 28), numStart);
+    // Identifiers are never money: UTR / txn / reference / account / GSTIN / IFSC / UPI / cheque, invoice and PO numbers.
+    if (IDENTIFIER_BEFORE.test(before)) continue;
     const after = text.slice(m.index + full.length, m.index + full.length + 12);
     if (/^\s*(%|percent)/.test(after)) continue;
+    if (/^\s*(\/|per\b|each\b|a (box|unit|kg|piece|carton))/.test(after)) continue; // unit rates, not invoice amounts
     if (!unit && /^\s*(st|nd|rd|th|tareekh|tarikh|date|ke baad|ke bad|tak|ko|din|days?|boxes|cartons|pcs|units|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/.test(after)) continue;
+    const digitsOnly = num.replace(/[,.]/g, "");
+    const hasComma = num.includes(",");
+    if (!hasComma && !unit && digitsOnly.length > 9) continue; // long bare digit runs are reference numbers
     const value = Number(num.replace(/,/g, ""));
     if (!Number.isFinite(value)) continue;
-    const hasComma = num.includes(",");
     const amount = unit ? value * (UNIT[unit] ?? UNIT[unit.replace(/s$/, "")] ?? 1) : value;
-    if (!currency && !unit && !hasComma && amount < 1000) continue; // bare small numbers are not amounts
+    const typed = Boolean(currency || unit || hasComma);
+    // A bare number counts only with money context nearby ("payment of 50000", "50000 bhej diya").
+    if (!typed && (amount < 1000 || !MONEY_CONTEXT.test(clauseAt(m.index)))) continue;
     out.push({ rawText: full.trim(), amount: Math.round(amount), role: roleFor(clauseAt(m.index)) });
   }
   if (outstanding) {

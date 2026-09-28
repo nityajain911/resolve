@@ -2,13 +2,19 @@ import { formatINR } from "./money";
 import type { BankCreditData, InvoiceCase } from "./types";
 
 /**
- * Deterministic bank-credit matching. This is a RULE, not an AI capability:
- * a credit is a STRONG match only if the amount matches the outstanding (or gross)
- * invoice amount AND either the payer is a known name/alias of the buyer or the
- * narration carries the invoice number.
+ * Deterministic bank-credit matching. This is a RULE, not an AI capability.
+ *
+ * Tiers:
+ *   STRONG   — amount matches AND the narration carries this invoice's number.
+ *              → PAID_UNMATCHED (no buyer follow-up until reconciled)
+ *   POSSIBLE — amount + known payer but no invoice reference, or a reference
+ *              with a different amount. The buyer may have several invoices of the
+ *              same amount, so this is NOT enough to call it paid.
+ *              → NEEDS_REVIEW (merchant confirms or rejects the match)
+ *   NONE     — no transition.
  */
 
-export type MatchStrength = "STRONG" | "WEAK" | "NONE";
+export type MatchStrength = "STRONG" | "POSSIBLE" | "NONE";
 
 export interface MatchResult {
   strength: MatchStrength;
@@ -78,8 +84,8 @@ export function matchCredit(credit: BankCreditData, c: InvoiceCase): MatchResult
   if (!creditAfterIssue) rationale.push("Credit is dated before the invoice was issued");
 
   let strength: MatchStrength = "NONE";
-  if (creditAfterIssue && amountMatches && (payerMatches || referenceMatches)) strength = "STRONG";
-  else if (creditAfterIssue && (amountMatches || referenceMatches) && (payerMatches || referenceMatches)) strength = "WEAK";
+  if (creditAfterIssue && amountMatches && referenceMatches) strength = "STRONG";
+  else if (creditAfterIssue && ((amountMatches && payerMatches) || referenceMatches)) strength = "POSSIBLE";
 
   return { strength, rationale, amountMatches, payerMatches, referenceMatches };
 }

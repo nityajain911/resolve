@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { Card, Eyebrow, SimLabel, StateBadge } from "@/components/ui";
 import { CLASSIFIER_PROMPT_VERSION } from "@/ai/classifier";
@@ -13,15 +13,27 @@ import { INVOICE_STATES } from "@/domain/types";
 import { COST_MATRIX_EXAMPLES, errorRisk, RISK_WEIGHT } from "@/evaluation/cost-matrix";
 import { EVAL_DIR, loadDevelopmentCases, loadHeldoutCases } from "@/evaluation/heldout-loader";
 import { evaluateClassifier, type ClassifierMetrics } from "@/evaluation/metrics";
+import { compareBaselines } from "@/evaluation/baselines";
 import { computeWrongChaseReport } from "@/evaluation/wrong-chase";
 
 export const dynamic = "force-dynamic";
 
-function latestReport(set: string, provider: string) {
-  const dir = path.join(EVAL_DIR, "reports");
-  if (!existsSync(dir)) return null;
-  const f = readdirSync(dir).filter((x) => x.startsWith(`${set}-${provider}-`) && x.endsWith(".json")).sort().at(-1);
-  return f ? JSON.parse(readFileSync(path.join(dir, f), "utf8")) : null;
+interface PublishedReport {
+  set: string;
+  heldOut: boolean;
+  provider: string;
+  promptVersion: string;
+  promptHash: string;
+  datasetHash: string;
+  evaluationTimestamp: string;
+  metrics: ClassifierMetrics;
+  providerErrors?: { caseId: string; error: string }[];
+}
+
+/** Frozen, committed evaluation reports (written by `npm run eval -- ... --publish`). */
+function publishedReport(name: "dev-live" | "heldout-live"): PublishedReport | null {
+  const f = path.join(EVAL_DIR, "published", `${name}.json`);
+  return existsSync(f) ? (JSON.parse(readFileSync(f, "utf8")) as PublishedReport) : null;
 }
 
 const pct = (x: number | null) => (x === null ? "—" : `${Math.round(x * 100)}%`);
@@ -34,7 +46,9 @@ export default async function EvaluationPage() {
   const dev = loadDevelopmentCases();
   const devResult = dev.status === "LOADED" ? await evaluateClassifier(dev.cases, demoClassifier) : null;
   const heldoutResult = heldout.status === "LOADED" ? await evaluateClassifier(heldout.cases, demoClassifier) : null;
-  const liveReport = heldout.status === "LOADED" ? latestReport("heldout", "live") : null;
+  const liveHeldout = heldout.status === "LOADED" ? publishedReport("heldout-live") : null;
+  const liveDev = publishedReport("dev-live");
+  const cmp = compareBaselines();
 
   const snapshot = createWorld(buildInvoiceBook(), { classify: classifyDemo });
   const byState = INVOICE_STATES.map((s) => ({ s, n: snapshot.caseOrder.filter((id) => snapshot.cases[id].currentState === s).length }));
@@ -50,7 +64,10 @@ export default async function EvaluationPage() {
           <h1 className="text-2xl font-semibold tracking-tight">Evaluation & impact</h1>
           <p className="mt-1 text-ink-2">Every number on this page is computed by code from the labelled synthetic invoice book or an evaluation file. Nothing is hardcoded.</p>
         </div>
-        <div className="flex gap-2"><SimLabel>Synthetic invoice book · seed {r.seed}</SimLabel><SimLabel>Snapshot {formatIst(r.snapshotAt)}</SimLabel></div>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex gap-2"><SimLabel>Synthetic invoice book · seed {r.seed}</SimLabel><SimLabel>Snapshot {formatIst(r.snapshotAt)}</SimLabel></div>
+          <div className="text-[11px] text-ink-3">Rebuilt from the seed on every load — demo clicks, payments and timers never change these numbers.</div>
+        </div>
       </div>
 
       {/* 1. WRONG CHASE */}
@@ -77,6 +94,36 @@ export default async function EvaluationPage() {
           </div>
           <p className="mt-4 text-[15px] font-medium">Resolve blocked {r.N} of {r.M} wrong chases in this labelled synthetic invoice book.</p>
           <p className="mt-1 text-xs text-ink-3">Resolve&apos;s decisions come only from observable evidence. Hidden ground truth is read solely by this evaluation harness. The classifier here is {r.classifier} — this measures the system design on synthetic data, not model accuracy.</p>
+        </Card>
+
+        <Card className="p-5">
+          <Eyebrow>Against a stronger benchmark</Eyebrow>
+          <p className="mt-1 text-sm text-ink-2">Blind reminders are an easy baseline. A competent rules setup — ledger check, strict bank matching (amount + invoice reference), and keyword suppression for payment / dispute / document words — is compared on the same book.</p>
+          <table className="mt-3 w-full text-sm">
+            <thead className="text-left text-xs text-ink-3">
+              <tr><th className="py-1.5 font-medium">Approach</th><th className="font-medium">Wrong chases blocked</th><th className="font-medium">Unnecessary pauses</th><th className="font-medium">Avoidable follow-up handled</th><th className="font-medium">Chooses the next action?</th></tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-line-2"><td className="py-2">Reminder-only</td><td className="num">0 of {cmp.M}</td><td className="num">0</td><td className="num">0 of {cmp.avoidableTotal}</td><td className="text-ink-3">No</td></tr>
+              <tr className="border-t border-line-2"><td className="py-2">Rules baseline</td><td className="num">{cmp.rules.blocked} of {cmp.M}</td><td className="num">{cmp.rules.unnecessaryPauses}</td><td className="num">{cmp.rules.avoidableHandled} of {cmp.avoidableTotal}</td><td className="text-ink-3">No — only suppresses</td></tr>
+              <tr className="border-t border-line-2 font-medium"><td className="py-2 text-brand-600">Resolve</td><td className="num">{cmp.resolve.blocked} of {cmp.M}</td><td className="num">{cmp.resolve.unnecessaryPauses}</td><td className="num">{cmp.resolve.avoidableHandled} of {cmp.avoidableTotal}</td><td>Yes — wait, plan, correction, review</td></tr>
+            </tbody>
+          </table>
+          <div className="mt-3 grid grid-cols-2 gap-4 text-xs text-ink-2">
+            <div>
+              <div className="font-semibold text-ink">Blocked by Resolve but not by rules ({cmp.resolveOnly.length})</div>
+              {cmp.resolveOnly.length === 0 ? <div className="text-ink-3">None.</div> : cmp.resolveOnly.map((x) => <div key={x.invoiceNumber}><span className="num">{x.invoiceNumber}</span> — {x.note}</div>)}
+              <div className="mt-1 text-ink-3">These come from the deterministic possible-match tier (amount + payer, no reference → review), not from the classifier.</div>
+            </div>
+            <div>
+              <div className="font-semibold text-ink">Blocked by rules but not by Resolve ({cmp.rulesOnly.length})</div>
+              {cmp.rulesOnly.length === 0 ? <div className="text-ink-3">None.</div> : cmp.rulesOnly.map((x) => <div key={x.invoiceNumber}><span className="num">{x.invoiceNumber}</span> — {x.note}</div>)}
+            </div>
+          </div>
+          <p className="mt-3 text-xs text-ink-3">
+            Read this honestly: on this book, simple rules capture most of the suppression value, and Resolve pauses {cmp.resolve.unnecessaryPauses - cmp.rules.unnecessaryPauses} more invoices unnecessarily. The keyword list was written by the same author as the synthetic messages, so the rules baseline is likely optimistic.
+            Resolve&apos;s difference is mostly in <em>what happens next</em> — a dated wait with a timer, an approved part-payment plan, a routed correction — which suppression alone cannot do, and which the pilot must measure.
+          </p>
         </Card>
 
         <div className="grid grid-cols-2 gap-4">
@@ -140,8 +187,23 @@ export default async function EvaluationPage() {
             {heldout.status === "LOADED" && heldoutResult && (
               <MetricsView title={`Held-out set · ${heldout.cases.length} cases · demo classifier`} m={heldoutResult.metrics} meta={`Dataset ${heldout.datasetHash.slice(0, 12)} · authored by ${heldout.file.meta.authoredBy}`} />
             )}
-            {liveReport && (
-              <div className="mt-4 text-xs text-ink-3">Latest live-provider report: {liveReport.provider} · {liveReport.evaluationTimestamp} · state accuracy {pct(liveReport.metrics.stateAccuracy)} · risk-weighted errors {liveReport.metrics.riskWeightedErrors}</div>
+            {liveHeldout && (
+              <div className="mt-5 border-t border-line pt-4">
+                <MetricsView title={`Held-out set · live model ${liveHeldout.provider}`} m={liveHeldout.metrics} meta={reportMeta(liveHeldout)} />
+              </div>
+            )}
+            {liveDev && (
+              <div className="mt-5 border-t border-line pt-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <Eyebrow>Real AI classifier · development set</Eyebrow>
+                  <span className="rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-rose-200">NOT HELD OUT</span>
+                </div>
+                <MetricsView title={`${liveDev.provider} · ${liveDev.metrics.n} scored cases`} m={liveDev.metrics} meta={reportMeta(liveDev)} />
+                <p className="mt-2 text-xs text-ink-3">
+                  The frozen prompt {liveDev.promptVersion} was run unchanged through Groq. The model was not tuned on these cases, but they were written by the same author as the prompt, so treat this as a sanity check — not generalisation.
+                  {liveDev.providerErrors?.length ? ` ${liveDev.providerErrors.length} case(s) failed at the provider and are excluded, not scored.` : ""}
+                </p>
+              </div>
             )}
             {devResult && (
               <div className="mt-5 border-t border-line pt-4">
@@ -228,6 +290,10 @@ export default async function EvaluationPage() {
       </section>
     </div>
   );
+}
+
+function reportMeta(r: PublishedReport): string {
+  return `Prompt ${r.promptVersion} · sha ${r.promptHash.slice(0, 10)} · dataset ${r.datasetHash.slice(0, 10)} · run ${r.evaluationTimestamp.slice(0, 16).replace("T", " ")} UTC`;
 }
 
 function MetricsView({ title, m, meta }: { title: string; m: ClassifierMetrics; meta: string }) {

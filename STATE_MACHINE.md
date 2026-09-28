@@ -21,7 +21,8 @@ Every invoice has exactly **one** `currentState`. Only `applyTransition()` in
 | From | To | Initiator | Condition |
 |---|---|---|---|
 | (open) | FOLLOW_UP_ACTIVE | RULE | Simulated Receivables Agent handoff |
-| FOLLOW_UP_ACTIVE | PAID_UNMATCHED | RULE | Strong bank match; bank-credit evidence required |
+| FOLLOW_UP_ACTIVE | PAID_UNMATCHED | RULE | STRONG bank match (amount + invoice reference); bank-credit evidence required |
+| FOLLOW_UP_ACTIVE / blockers | NEEDS_REVIEW | RULE | POSSIBLE bank match (amount + payer, no reference) — `POSSIBLE_BANK_MATCH` |
 | FOLLOW_UP_ACTIVE | PAPERWORK_BLOCKED / CASH_CONSTRAINED / PROMISE_TO_PAY / COMMERCIAL_DISPUTE | AI (HIGH only), MERCHANT | |
 | FOLLOW_UP_ACTIVE | NEEDS_REVIEW | AI, RULE, MERCHANT | |
 | PAID_UNMATCHED | RESOLVED | MERCHANT, PAYMENT_EVENT | Match confirmed; outstanding = 0 |
@@ -41,6 +42,44 @@ needs HIGH confidence (except into NEEDS_REVIEW), RESOLVED needs zero outstandin
 never resume on a paid invoice. The AI can never reach PAID_UNMATCHED or RESOLVED: a buyer
 saying "paid" triggers the bank-matching rule, and if no credit matches the case goes to
 NEEDS_REVIEW.
+
+## Guards between the AI and any transition
+
+- **Financial invariants** (`domain/understanding-invariants.ts`), applied to every
+  CaseUnderstanding from any provider: implausible amounts (> 3× invoice), amount exceeding the
+  outstanding, "now" amount covering the whole balance, split parts exceeding the balance, negative
+  remainder, disputed amount exceeding the balance. Any violation → NEEDS_REVIEW with that code
+  (e.g. `AMOUNT_EXCEEDS_OUTSTANDING`).
+- **Amount extraction** only accepts typed money (₹/Rs/INR, K/L/lakh/Cr, Indian digit grouping) or a
+  bare number with money context; numbers inside tokens or after UTR / txn / ref / account / GSTIN /
+  IFSC / UPI / cheque / invoice / PO are never amounts; unit rates ("₹2 per box") are skipped.
+
+## Assessments vs transitions
+
+`CaseAssessment` snapshots record confidence and evidence strength (single source / corroborated /
+conflicting). New evidence can update the assessment without a transition — e.g. the imported IMS
+file for SCP-1057 adds "Assessment updated — corroborating IMS evidence received" while the state
+stays PAPERWORK_BLOCKED.
+
+## Follow-up suppression
+
+`followUpSuppressedUntil` is stored explicitly (promise: promised day end + grace; active plan: next
+installment day end + grace) and checked by the policy engine before any reminder
+(`FOLLOW_UP_SUPPRESSED`). It is cleared when follow-up resumes or the invoice resolves.
+
+## Idempotency
+
+Approve / reject / confirm-match / correction-issued / split are no-ops when repeated; payment events
+de-duplicate on `paymentId`, bank credits on `bankTxnId`; classifications accept an idempotency key
+derived from the displayed case version; link completion and timers are retry-safe. Razorpay links
+use a stable `reference_id` per plan and browser session, and an existing link is looked up and
+reused before creating a new one.
+
+## Policy snapshots
+
+Each `PolicyEvaluation` stores the policy version and the thresholds used. Approving an action whose
+evaluation is from an older policy version re-runs the policy first; if it is now outside policy the
+approval is refused and recorded.
 
 ## Evidence
 

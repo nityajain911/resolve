@@ -1,0 +1,880 @@
+{
+  "set": "dev",
+  "heldOut": false,
+  "promptVersion": "case-classifier-v1",
+  "promptHash": "ba530b3adeb983d8c73e1f05b471e5a757b76daefbac0b014fba0ae19aa01d0f",
+  "promptAppliesToProvider": true,
+  "datasetHash": "4904aaf9f2d90e6a4260a02ea3cd08465b7bfa8bc320eb68931f152781889f14",
+  "evaluationTimestamp": "2026-09-28T04:27:08.282Z",
+  "provider": "groq:openai/gpt-oss-120b",
+  "classifierVersion": "groq:openai/gpt-oss-120b",
+  "datasetMeta": {
+    "set": "development",
+    "heldOut": false,
+    "authoredBy": "Claude Code (while building the demo classifier and prompt v1)",
+    "authoredAt": "2026-09-28",
+    "warning": "NOT HELD OUT. These cases were written and used while developing the parser and prompt. Passing them says nothing about generalisation."
+  },
+  "metrics": {
+    "n": 47,
+    "stateAccuracy": 0.7659574468085106,
+    "perState": [
+      {
+        "state": "CASH_CONSTRAINED",
+        "support": 3,
+        "predicted": 3,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "state": "COMMERCIAL_DISPUTE",
+        "support": 3,
+        "predicted": 3,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "state": "FOLLOW_UP_ACTIVE",
+        "support": 3,
+        "predicted": 5,
+        "precision": 0.4,
+        "recall": 0.6666666666666666,
+        "f1": 0.5
+      },
+      {
+        "state": "NEEDS_REVIEW",
+        "support": 16,
+        "predicted": 13,
+        "precision": 0.6923076923076923,
+        "recall": 0.5625,
+        "f1": 0.6206896551724138
+      },
+      {
+        "state": "PAID_UNMATCHED",
+        "support": 2,
+        "predicted": 3,
+        "precision": 0.6666666666666666,
+        "recall": 1,
+        "f1": 0.8
+      },
+      {
+        "state": "PAPERWORK_BLOCKED",
+        "support": 5,
+        "predicted": 6,
+        "precision": 0.8333333333333334,
+        "recall": 1,
+        "f1": 0.9090909090909091
+      },
+      {
+        "state": "PROMISE_TO_PAY",
+        "support": 15,
+        "predicted": 14,
+        "precision": 0.8571428571428571,
+        "recall": 0.8,
+        "f1": 0.8275862068965518
+      }
+    ],
+    "confusion": {
+      "CASH_CONSTRAINED": {
+        "CASH_CONSTRAINED": 3,
+        "COMMERCIAL_DISPUTE": 0,
+        "FOLLOW_UP_ACTIVE": 0,
+        "NEEDS_REVIEW": 0,
+        "PAID_UNMATCHED": 0,
+        "PAPERWORK_BLOCKED": 0,
+        "PROMISE_TO_PAY": 0
+      },
+      "COMMERCIAL_DISPUTE": {
+        "CASH_CONSTRAINED": 0,
+        "COMMERCIAL_DISPUTE": 3,
+        "FOLLOW_UP_ACTIVE": 0,
+        "NEEDS_REVIEW": 0,
+        "PAID_UNMATCHED": 0,
+        "PAPERWORK_BLOCKED": 0,
+        "PROMISE_TO_PAY": 0
+      },
+      "FOLLOW_UP_ACTIVE": {
+        "CASH_CONSTRAINED": 0,
+        "COMMERCIAL_DISPUTE": 0,
+        "FOLLOW_UP_ACTIVE": 2,
+        "NEEDS_REVIEW": 1,
+        "PAID_UNMATCHED": 0,
+        "PAPERWORK_BLOCKED": 0,
+        "PROMISE_TO_PAY": 0
+      },
+      "NEEDS_REVIEW": {
+        "CASH_CONSTRAINED": 0,
+        "COMMERCIAL_DISPUTE": 0,
+        "FOLLOW_UP_ACTIVE": 3,
+        "NEEDS_REVIEW": 9,
+        "PAID_UNMATCHED": 1,
+        "PAPERWORK_BLOCKED": 1,
+        "PROMISE_TO_PAY": 2
+      },
+      "PAID_UNMATCHED": {
+        "CASH_CONSTRAINED": 0,
+        "COMMERCIAL_DISPUTE": 0,
+        "FOLLOW_UP_ACTIVE": 0,
+        "NEEDS_REVIEW": 0,
+        "PAID_UNMATCHED": 2,
+        "PAPERWORK_BLOCKED": 0,
+        "PROMISE_TO_PAY": 0
+      },
+      "PAPERWORK_BLOCKED": {
+        "CASH_CONSTRAINED": 0,
+        "COMMERCIAL_DISPUTE": 0,
+        "FOLLOW_UP_ACTIVE": 0,
+        "NEEDS_REVIEW": 0,
+        "PAID_UNMATCHED": 0,
+        "PAPERWORK_BLOCKED": 5,
+        "PROMISE_TO_PAY": 0
+      },
+      "PROMISE_TO_PAY": {
+        "CASH_CONSTRAINED": 0,
+        "COMMERCIAL_DISPUTE": 0,
+        "FOLLOW_UP_ACTIVE": 0,
+        "NEEDS_REVIEW": 3,
+        "PAID_UNMATCHED": 0,
+        "PAPERWORK_BLOCKED": 0,
+        "PROMISE_TO_PAY": 12
+      }
+    },
+    "riskWeightedErrors": 21,
+    "errorsByTier": {
+      "HIGH": 3,
+      "MODERATE": 4,
+      "LOW": 4
+    },
+    "amountExactMatch": {
+      "correct": 45,
+      "total": 47
+    },
+    "temporal": {
+      "correct": 20,
+      "total": 31,
+      "byCategory": {
+        "WEEKDAY": {
+          "correct": 3,
+          "total": 4
+        },
+        "TOMORROW_KAL": {
+          "correct": 3,
+          "total": 3
+        },
+        "MONTH_BOUNDARY": {
+          "correct": 4,
+          "total": 5
+        },
+        "PARSO": {
+          "correct": 2,
+          "total": 3
+        },
+        "AFTER_15TH": {
+          "correct": 1,
+          "total": 3
+        },
+        "NEXT_FRIDAY": {
+          "correct": 2,
+          "total": 3
+        },
+        "EXPLICIT_DATE": {
+          "correct": 1,
+          "total": 1
+        },
+        "WEEKEND_BOUNDARY": {
+          "correct": 0,
+          "total": 4
+        },
+        "VAGUE": {
+          "correct": 1,
+          "total": 2
+        },
+        "UNCATEGORISED": {
+          "correct": 3,
+          "total": 3
+        }
+      }
+    },
+    "ambiguousHandling": {
+      "routedToReview": 5,
+      "total": 8
+    }
+  },
+  "providerErrors": [],
+  "predictions": [
+    {
+      "caseId": "dev-01",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "WEEKDAY",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer promises to pay the invoice by Monday (2026-09-28)."
+    },
+    {
+      "caseId": "dev-02",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "WEEKDAY",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states payment will be made on Monday (2026-09-28)."
+    },
+    {
+      "caseId": "dev-03",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "WEEKDAY",
+      "expectsAmbiguity": true,
+      "risk": {
+        "tier": "MODERATE",
+        "why": "Ambiguous case acted on with false confidence"
+      },
+      "explanation": "Buyer promises to transfer the payment by Friday (2026-09-25)."
+    },
+    {
+      "caseId": "dev-04",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "WEEKDAY",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer promises to pay on Wednesday, 2026-09-23."
+    },
+    {
+      "caseId": "dev-05",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "TOMORROW_KAL",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says they will pay in the afternoon tomorrow."
+    },
+    {
+      "caseId": "dev-06",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "MONTH_BOUNDARY",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says they will make the NEFT payment by tomorrow."
+    },
+    {
+      "caseId": "dev-07",
+      "expectedState": "PAID_UNMATCHED",
+      "predictedState": "PAID_UNMATCHED",
+      "rawProposedState": "PAID_UNMATCHED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "TOMORROW_KAL",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states the payment was made yesterday (2026-09-21) and asks the seller to verify."
+    },
+    {
+      "caseId": "dev-08",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "TOMORROW_KAL",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer promises to pay the full invoice amount by tomorrow end of day."
+    },
+    {
+      "caseId": "dev-09",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "PARSO",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says they will do it the day after tomorrow, indicating a promise to pay by 2026-09-26."
+    },
+    {
+      "caseId": "dev-10",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "PARSO",
+      "expectsAmbiguity": true,
+      "risk": null,
+      "explanation": "Buyer message only contains the word “parso”, which is ambiguous and provides no clear reason for the overdue invoice."
+    },
+    {
+      "caseId": "dev-11",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "PARSO",
+      "expectsAmbiguity": true,
+      "risk": null,
+      "explanation": "Buyer says accounts mentioned it two days ago, but provides no reason for non‑payment."
+    },
+    {
+      "caseId": "dev-12",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "AFTER_15TH",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says they will clear the invoice after the 15th."
+    },
+    {
+      "caseId": "dev-13",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "AFTER_15TH",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says payment will be released after the 15th, without a specific date."
+    },
+    {
+      "caseId": "dev-14",
+      "expectedState": "CASH_CONSTRAINED",
+      "predictedState": "CASH_CONSTRAINED",
+      "rawProposedState": "CASH_CONSTRAINED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "AFTER_15TH",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer offers to pay ₹90K today and the remaining ₹175,500 after the 15th of the next month."
+    },
+    {
+      "caseId": "dev-15",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "NEXT_FRIDAY",
+      "expectsAmbiguity": true,
+      "risk": null,
+      "explanation": "Buyer says they will release the payment next Friday, but the date reference is ambiguous."
+    },
+    {
+      "caseId": "dev-16",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "NEXT_FRIDAY",
+      "expectsAmbiguity": false,
+      "risk": {
+        "tier": "LOW",
+        "why": "Only costs merchant review time"
+      },
+      "explanation": "Buyer mentions “next Friday” as a payment date, but the expression is ambiguous relative to the message date, so the timing cannot be determined confidently."
+    },
+    {
+      "caseId": "dev-17",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "NEXT_FRIDAY",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer promises to pay by next Friday (2026-10-02)."
+    },
+    {
+      "caseId": "dev-18",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "MONTH_BOUNDARY",
+      "expectsAmbiguity": false,
+      "risk": {
+        "tier": "LOW",
+        "why": "Only costs merchant review time"
+      },
+      "explanation": "Buyer says payment will be made by month end, which is not a specific date, so the case needs review."
+    },
+    {
+      "caseId": "dev-19",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "EXPLICIT_DATE",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer promises to make the NEFT payment on 5 Oct."
+    },
+    {
+      "caseId": "dev-20",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "MONTH_BOUNDARY",
+      "expectsAmbiguity": true,
+      "risk": null,
+      "explanation": "Buyer says they will pay by the 31st, but the exact date is unclear."
+    },
+    {
+      "caseId": "dev-21",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "MONTH_BOUNDARY",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer promises to pay on 2nd of the month (2026-10-02)."
+    },
+    {
+      "caseId": "dev-22",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "MONTH_BOUNDARY",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states they will pay by 5 Jan."
+    },
+    {
+      "caseId": "dev-23",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "WEEKEND_BOUNDARY",
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says payment will be made by Monday."
+    },
+    {
+      "caseId": "dev-24",
+      "expectedState": "PROMISE_TO_PAY",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "WEEKEND_BOUNDARY",
+      "expectsAmbiguity": false,
+      "risk": {
+        "tier": "LOW",
+        "why": "Only costs merchant review time"
+      },
+      "explanation": "Buyer says they will make the payment by the weekend, but no exact date is provided, making the promise ambiguous."
+    },
+    {
+      "caseId": "dev-25",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "FOLLOW_UP_ACTIVE",
+      "rawProposedState": "FOLLOW_UP_ACTIVE",
+      "confidenceBand": "HIGH",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "WEEKEND_BOUNDARY",
+      "expectsAmbiguity": false,
+      "risk": {
+        "tier": "HIGH",
+        "why": "A NEEDS_REVIEW case would be chased as if nothing were blocking it"
+      },
+      "explanation": "Buyer states they will check after the weekend, providing no concrete payment date or amount."
+    },
+    {
+      "caseId": "dev-26",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "PROMISE_TO_PAY",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "HIGH",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "WEEKEND_BOUNDARY",
+      "expectsAmbiguity": true,
+      "risk": {
+        "tier": "MODERATE",
+        "why": "Ambiguous case acted on with false confidence"
+      },
+      "explanation": "Buyer promises to make the payment on Saturday."
+    },
+    {
+      "caseId": "dev-27",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "FOLLOW_UP_ACTIVE",
+      "rawProposedState": "FOLLOW_UP_ACTIVE",
+      "confidenceBand": "HIGH",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": false,
+      "temporalCategory": "VAGUE",
+      "expectsAmbiguity": true,
+      "risk": {
+        "tier": "HIGH",
+        "why": "A NEEDS_REVIEW case would be chased as if nothing were blocking it"
+      },
+      "explanation": "Buyer says they will make the payment soon, without specifying a date."
+    },
+    {
+      "caseId": "dev-28",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "PROMISE_TO_PAY",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "temporalCategory": "VAGUE",
+      "expectsAmbiguity": true,
+      "risk": null,
+      "explanation": "Buyer says they will definitely pay next week, but the date is not precise."
+    },
+    {
+      "caseId": "dev-29",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "predictedState": "PAPERWORK_BLOCKED",
+      "rawProposedState": "PAPERWORK_BLOCKED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": false,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says the GSTIN is incorrect and accounts rejected the invoice; supporting IMS import confirms the GSTIN issue."
+    },
+    {
+      "caseId": "dev-30",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "predictedState": "PAPERWORK_BLOCKED",
+      "rawProposedState": "PAPERWORK_BLOCKED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states the invoice is missing a PO number, which is a paperwork issue preventing processing."
+    },
+    {
+      "caseId": "dev-31",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "predictedState": "PAPERWORK_BLOCKED",
+      "rawProposedState": "PAPERWORK_BLOCKED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer requests the signed delivery challan and notes the GRN is pending, indicating a paperwork issue."
+    },
+    {
+      "caseId": "dev-32",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "predictedState": "PAPERWORK_BLOCKED",
+      "rawProposedState": "PAPERWORK_BLOCKED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states the invoice format is incorrect."
+    },
+    {
+      "caseId": "dev-33",
+      "expectedState": "PAPERWORK_BLOCKED",
+      "predictedState": "PAPERWORK_BLOCKED",
+      "rawProposedState": "PAPERWORK_BLOCKED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states the GST number is incorrect."
+    },
+    {
+      "caseId": "dev-34",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "PAPERWORK_BLOCKED",
+      "rawProposedState": "PAPERWORK_BLOCKED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": {
+        "tier": "MODERATE",
+        "why": "Ambiguous case acted on with false confidence"
+      },
+      "explanation": "Buyer says the accounts have been parked due to a PO mismatch, indicating a paperwork problem."
+    },
+    {
+      "caseId": "dev-35",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states the GST is incorrect and that 20 boxes were damaged, indicating both a paperwork issue and a quality dispute."
+    },
+    {
+      "caseId": "dev-36",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says the invoice is on hold but gives no reason, amount, or date."
+    },
+    {
+      "caseId": "dev-37",
+      "expectedState": "COMMERCIAL_DISPUTE",
+      "predictedState": "COMMERCIAL_DISPUTE",
+      "rawProposedState": "COMMERCIAL_DISPUTE",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states that 40 cartons arrived damaged, indicating a dispute over the quality of goods."
+    },
+    {
+      "caseId": "dev-38",
+      "expectedState": "COMMERCIAL_DISPUTE",
+      "predictedState": "COMMERCIAL_DISPUTE",
+      "rawProposedState": "COMMERCIAL_DISPUTE",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer claims ₹50,000 worth of goods were damaged and therefore disputes that portion, while stating they will release the remaining ₹150,000."
+    },
+    {
+      "caseId": "dev-39",
+      "expectedState": "COMMERCIAL_DISPUTE",
+      "predictedState": "COMMERCIAL_DISPUTE",
+      "rawProposedState": "COMMERCIAL_DISPUTE",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states the invoice rate is incorrect, indicating a commercial dispute."
+    },
+    {
+      "caseId": "dev-40",
+      "expectedState": "CASH_CONSTRAINED",
+      "predictedState": "CASH_CONSTRAINED",
+      "rawProposedState": "CASH_CONSTRAINED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": false,
+      "temporalCorrect": true,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states funds are tight and will pay 50% of the invoice now, with the remaining balance to be paid by 10 Oct."
+    },
+    {
+      "caseId": "dev-41",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "FOLLOW_UP_ACTIVE",
+      "rawProposedState": "FOLLOW_UP_ACTIVE",
+      "confidenceBand": "HIGH",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": {
+        "tier": "HIGH",
+        "why": "A NEEDS_REVIEW case would be chased as if nothing were blocking it"
+      },
+      "explanation": "Buyer says they will pay gradually ('thoda thoda karke denge') but provides no amount or date."
+    },
+    {
+      "caseId": "dev-42",
+      "expectedState": "CASH_CONSTRAINED",
+      "predictedState": "CASH_CONSTRAINED",
+      "rawProposedState": "CASH_CONSTRAINED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says they can pay 1.5 L now and the remaining balance after the 20th."
+    },
+    {
+      "caseId": "dev-43",
+      "expectedState": "PAID_UNMATCHED",
+      "predictedState": "PAID_UNMATCHED",
+      "rawProposedState": "PAID_UNMATCHED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": true,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer states the invoice was paid yesterday via NEFT (UTR 1234)."
+    },
+    {
+      "caseId": "dev-44",
+      "expectedState": "NEEDS_REVIEW",
+      "predictedState": "PAID_UNMATCHED",
+      "rawProposedState": "PAID_UNMATCHED",
+      "confidenceBand": "HIGH",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": {
+        "tier": "MODERATE",
+        "why": "Ambiguous case acted on with false confidence"
+      },
+      "explanation": "Buyer states they have sent payment after deducting TDS. No amount or date is provided."
+    },
+    {
+      "caseId": "dev-45",
+      "expectedState": "FOLLOW_UP_ACTIVE",
+      "predictedState": "NEEDS_REVIEW",
+      "rawProposedState": "NEEDS_REVIEW",
+      "confidenceBand": "NEEDS_REVIEW",
+      "stateCorrect": false,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": {
+        "tier": "LOW",
+        "why": "Only costs merchant review time"
+      },
+      "explanation": "Buyer message contains only \"ok\" with no indication of reason for non‑payment."
+    },
+    {
+      "caseId": "dev-46",
+      "expectedState": "FOLLOW_UP_ACTIVE",
+      "predictedState": "FOLLOW_UP_ACTIVE",
+      "rawProposedState": "FOLLOW_UP_ACTIVE",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer says they will check with accounts and revert."
+    },
+    {
+      "caseId": "dev-47",
+      "expectedState": "FOLLOW_UP_ACTIVE",
+      "predictedState": "FOLLOW_UP_ACTIVE",
+      "rawProposedState": "FOLLOW_UP_ACTIVE",
+      "confidenceBand": "HIGH",
+      "stateCorrect": true,
+      "amountsCorrect": true,
+      "temporalCorrect": null,
+      "expectsAmbiguity": false,
+      "risk": null,
+      "explanation": "Buyer apologizes for missing the invoice and says they will process it, without providing a date."
+    }
+  ]
+}

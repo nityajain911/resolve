@@ -9,7 +9,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "eval": "tsx --tsconfig tsconfig.json scripts/run-eval.ts"
+    "eval": "tsx --tsconfig tsconfig.json scripts/run-eval.ts",
+    "eval:live": "tsx --env-file=.env.local --tsconfig tsconfig.json scripts/run-eval.ts --provider live",
+    "heldout:draft": "tsx --env-file=.env.local --tsconfig tsconfig.json scripts/draft-heldout.ts",
+    "heldout:promote": "tsx --tsconfig tsconfig.json scripts/promote-heldout.ts"
   },
   "dependencies": {
     "clsx": "^2.1.1",

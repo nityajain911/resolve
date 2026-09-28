@@ -17,8 +17,22 @@ import * as engine from "@/domain/engine";
 import { istDate } from "@/domain/time";
 import type { CaseUnderstanding, InvoiceState, MerchantPolicy, PaymentLinkRecord, WorldState } from "@/domain/types";
 
-const STORAGE_KEY = "resolve-demo-world-v3";
+const STORAGE_KEY = "resolve-demo-world-v4"; // bump when WorldState shape changes: old saved worlds are ignored
 const ctx = { classify: classifyDemo };
+
+/** Random per-browser id; keeps Razorpay reference ids unique across visitors and resets. */
+function demoSessionId(): string {
+  try {
+    let id = localStorage.getItem("resolve-demo-session");
+    if (!id) {
+      id = Math.random().toString(36).slice(2, 10);
+      localStorage.setItem("resolve-demo-session", id);
+    }
+    return id;
+  } catch {
+    return "nostore";
+  }
+}
 
 function persist(w: WorldState) {
   try {
@@ -60,8 +74,9 @@ interface Store {
   reject: (actionId: string) => void;
   editPlan: (actionId: string, immediateAmount: number, remainderDate: string) => void;
   markCorrectionIssued: (caseId: string) => void;
-  classify: (caseId: string, state: InvoiceState, opts?: { note?: string; promiseDate?: string }) => void;
-  simulatePayment: (caseId: string, amount: number) => void;
+  classify: (caseId: string, state: InvoiceState, opts?: { note?: string; promiseDate?: string; idempotencyKey?: string }) => void;
+  simulatePayment: (caseId: string, amount: number, idempotencyKey?: string) => void;
+  recordMerchantPayment: (caseId: string, amount: number, idempotencyKey?: string) => void;
   addBuyerReply: (caseId: string, text: string, type?: BookEvidence["type"]) => Promise<void>;
   updatePolicy: (patch: Partial<Omit<MerchantPolicy, "version">>) => void;
   notify: (text: string, tone?: Toast["tone"]) => void;
@@ -77,6 +92,7 @@ export function ResolveProvider({ children }: { children: ReactNode }) {
   const [demoStep, setDemoStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const worldRef = useRef(world);
+  const inFlight = useRef(new Set<string>());
 
   useEffect(() => {
     try {
@@ -126,8 +142,14 @@ export function ResolveProvider({ children }: { children: ReactNode }) {
   const approve = useCallback(
     async (actionId: string) => {
       const a = worldRef.current.actions[actionId];
-      if (!a) return;
+      if (!a || inFlight.current.has(actionId)) return; // double click while executing → no-op
+      inFlight.current.add(actionId);
+      try {
       const approved = run((w) => engine.approveAction(w, actionId));
+      if (approved?.actions[actionId]?.status === "BLOCKED") {
+        notify(approved.actions[actionId].result ?? "Policy changed — re-review this action", "warn");
+        return;
+      }
       if (!approved || a.type !== "CREATE_PART_PAYMENT_LINK") {
         if (approved) notify("Approved");
         return;
@@ -155,6 +177,7 @@ export function ResolveProvider({ children }: { children: ReactNode }) {
             finalDate: plan.installments[1]?.dueDate,
             customer: { name: c.buyerContext.name, email: c.buyerContext.contact.email, contact: c.buyerContext.contact.phone },
             planId: plan.id,
+            sessionId: demoSessionId(),
           }),
         });
         const body = await res.json();
@@ -175,6 +198,9 @@ export function ResolveProvider({ children }: { children: ReactNode }) {
         setBusy(false);
       }
       run((w) => engine.completePaymentLink(w, actionId, link), link.mode === "TEST_MODE" ? "Razorpay test-mode link created" : "Simulated payment link created");
+      } finally {
+        inFlight.current.delete(actionId);
+      }
     },
     [run, notify],
   );
@@ -230,6 +256,11 @@ export function ResolveProvider({ children }: { children: ReactNode }) {
         worldRef.current = w;
         setWorld(w);
         persist(w);
+        try {
+          localStorage.removeItem("resolve-demo-session");
+        } catch {
+          /* ignore */
+        }
         setDemoStep(0);
         notify("Demo reset — same seed, same invoice book");
       },
@@ -241,7 +272,8 @@ export function ResolveProvider({ children }: { children: ReactNode }) {
       editPlan: (id, amt, date) => run((w) => engine.editPartPaymentPlan(w, id, { immediateAmount: amt, remainderDate: date }), "Plan updated — policy re-evaluated"),
       markCorrectionIssued: (id) => run((w) => engine.markCorrectionIssued(w, id), "Correction marked issued"),
       classify: (id, s, opts) => run((w) => engine.classifyCase(w, id, s, opts), "Classified · added to labelled review set"),
-      simulatePayment: (id, amt) => run((w) => engine.simulatePayment(w, id, amt), "Simulated payment event recorded"),
+      simulatePayment: (id, amt, key) => run((w) => engine.simulatePayment(w, id, amt, { paymentId: key }), "Simulated payment event recorded"),
+      recordMerchantPayment: (id, amt, key) => run((w) => engine.recordMerchantPayment(w, id, amt, key), "Payment recorded from your ledger and reconciled"),
       addBuyerReply,
       updatePolicy: (patch) => run((w) => engine.updatePolicy(w, patch), "Policy updated"),
     }),

@@ -21,6 +21,8 @@ export interface CreateLinkRequest {
   finalDate?: string; // YYYY-MM-DD
   customer: { name: string; email: string; contact: string };
   planId: string;
+  /** Per-browser demo session, so different visitors never share a reference id. */
+  sessionId?: string;
 }
 
 export type RazorpayMode = "TEST_MODE" | "SIMULATED";
@@ -47,11 +49,34 @@ export function simulatedLink(req: CreateLinkRequest, reason: string, now = new 
   };
 }
 
+export function referenceId(req: Pick<CreateLinkRequest, "invoiceNumber" | "planId" | "sessionId">): string {
+  const session = (req.sessionId ?? "").replace(/[^A-Za-z0-9]/g, "").slice(0, 8);
+  return [req.invoiceNumber, req.planId, session].filter(Boolean).join("-").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
+}
+
 export async function createPartPaymentLink(req: CreateLinkRequest): Promise<PaymentLinkRecord> {
   const cfg = razorpayConfig();
   if (cfg.mode === "SIMULATED") return simulatedLink(req, cfg.reason!);
   try {
     const rzp = new Razorpay({ key_id: process.env.RAZORPAY_KEY_ID!, key_secret: process.env.RAZORPAY_KEY_SECRET! });
+    const reference = referenceId(req);
+    // Idempotency: if this plan already has a live link (retry, double click), return it instead of creating another.
+    const existing = (await rzp.paymentLink.all({ reference_id: reference } as never)) as unknown as {
+      payment_links?: { id: string; short_url: string; status: string; amount: number }[];
+    };
+    const reuse = existing.payment_links?.find((l) => !["cancelled", "expired"].includes(l.status));
+    if (reuse) {
+      return {
+        mode: "TEST_MODE",
+        id: String(reuse.id),
+        shortUrl: String(reuse.short_url),
+        amount: reuse.amount / 100,
+        acceptPartial: true,
+        firstMinPartialAmount: req.firstMinPartialAmount,
+        createdAt: new Date().toISOString(),
+        fallbackReason: "Existing test-mode link for this plan reused (idempotent retry)",
+      };
+    }
     const expireBy = req.finalDate
       ? Math.floor(new Date(`${req.finalDate}T23:59:59+05:30`).getTime() / 1000) + 7 * 86400
       : undefined;
@@ -60,7 +85,8 @@ export async function createPartPaymentLink(req: CreateLinkRequest): Promise<Pay
       currency: "INR",
       accept_partial: true,
       first_min_partial_amount: toPaise(req.firstMinPartialAmount),
-      reference_id: `${req.invoiceNumber}-${Date.now().toString(36)}`.slice(0, 40),
+      // Stable per plan: a retried request cannot create a second link for the same plan.
+      reference_id: reference,
       description: `${req.invoiceNumber} — agreed part-payment plan (Resolve prototype, test mode)`,
       customer: req.customer,
       notify: { sms: false, email: false },

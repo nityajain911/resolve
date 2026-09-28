@@ -55,7 +55,9 @@ describe("policy engine", () => {
   it("part-payment: review-first → REVIEW_REQUIRED when within limits", () => {
     const a = actionsFor(w, HERO.cash).find((x) => x.type === "CREATE_PART_PAYMENT_LINK")!;
     expect(a.status).toBe("REVIEW_REQUIRED");
-    expect(a.policyEvaluation.checks.filter((c) => c.code !== "REVIEW_FIRST").every((c) => c.passed)).toBe(true);
+    expect(a.policyEvaluation.checks.filter((c) => c.severity === "BLOCK").every((c) => c.passed)).toBe(true);
+    // "after the 15th" is a lower bound: the proposed remainder date must be confirmed, never assumed.
+    expect(a.policyEvaluation.reasonCodes).toEqual(expect.arrayContaining(["REVIEW_FIRST", "REMAINDER_DATE_CONFIRMED"]));
   });
 
   it("part-payment below minimum or beyond max extension is blocked", () => {

@@ -44,3 +44,4 @@ next-env.d.ts
 /evaluation/reports/*.json
 .env*.local
 !.env.example
+/evaluation/heldout-candidates.json

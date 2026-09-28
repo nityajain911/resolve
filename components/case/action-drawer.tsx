@@ -52,6 +52,8 @@ export function ActionDrawer({ action, c, onClose }: { action: ResolutionAction;
                   <div className="text-xs text-ink-3">{n === 0 ? "Pay now" : "Remainder"}</div>
                   <div className="num text-lg font-semibold">{formatINR(i.amount)}</div>
                   <div className="text-xs text-ink-2">{i.dueDate ? `by ${formatDate(i.dueDate)}` : "date needed"}</div>
+                  {i.dateSource === "PROPOSED_FROM_LOWER_BOUND" && <div className="mt-0.5 text-[11px] font-medium text-amber-800">Proposed from an “after” condition — confirm</div>}
+                  {i.dateSource === "MERCHANT_SET" && <div className="mt-0.5 text-[11px] text-ink-3">Set by merchant</div>}
                 </div>
               ))}
             </div>

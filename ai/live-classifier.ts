@@ -100,16 +100,45 @@ function fallback(input: ClassifierInput, reason: string, provider: string): Cas
     entities: { blockerKind: "UNKNOWN" },
     evidenceUsed: [input.primaryEvidence.id],
     conciseExplanation: `Live classifier unavailable (${reason}). A person should read this reply.`,
+    providerError: reason,
     provider,
     promptVersion: CLASSIFIER_PROMPT_VERSION,
   };
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Seconds Groq suggests waiting, from the retry-after header or the "try again in 1.1s" message. */
+function retryAfterMs(err: InstanceType<typeof Groq.RateLimitError>): number {
+  const header = Number(err.headers?.get?.("retry-after"));
+  if (Number.isFinite(header) && header > 0) return header * 1000;
+  const m = /try again in ([\d.]+)s/i.exec(err.message);
+  return m ? Math.ceil(Number(m[1]) * 1000) : 5000;
+}
+
 export class LiveCaseClassifier implements CaseClassifier {
   readonly id = `groq:${LIVE_MODEL}`;
-  private client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  private client: Groq;
+
+  /**
+   * `patient` (evaluation mode): wait out rate limits instead of degrading to NEEDS_REVIEW,
+   * so a throttled call is never scored as a model prediction.
+   */
+  constructor(private opts: { patient?: boolean; maxWaits?: number } = {}) {
+    this.client = new Groq({ apiKey: process.env.GROQ_API_KEY, maxRetries: opts.patient ? 0 : 2 });
+  }
 
   async classify(input: ClassifierInput): Promise<CaseUnderstanding> {
+    for (let attempt = 0; ; attempt++) {
+      const u = await this.classifyOnce(input);
+      if (!this.opts.patient || u.providerError !== "rate limited" || attempt >= (this.opts.maxWaits ?? 12)) return u;
+      await sleep(this.lastWaitMs + 250);
+    }
+  }
+
+  private lastWaitMs = 5000;
+
+  private async classifyOnce(input: ClassifierInput): Promise<CaseUnderstanding> {
     const prompt = loadPrompt(CLASSIFIER_PROMPT_VERSION);
     try {
       const response = await this.client.chat.completions.create({
@@ -145,7 +174,10 @@ export class LiveCaseClassifier implements CaseClassifier {
         promptVersion: `${CLASSIFIER_PROMPT_VERSION}@${prompt.sha256.slice(0, 12)}`,
       };
     } catch (err) {
-      if (err instanceof Groq.RateLimitError) return fallback(input, "rate limited", this.id);
+      if (err instanceof Groq.RateLimitError) {
+        this.lastWaitMs = retryAfterMs(err);
+        return fallback(input, "rate limited", this.id);
+      }
       if (err instanceof Groq.APIError) return fallback(input, `API error ${err.status ?? ""}`.trim(), this.id);
       if (err instanceof SyntaxError) return fallback(input, "unparseable output", this.id);
       return fallback(input, "network error", this.id);

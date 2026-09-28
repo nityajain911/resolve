@@ -18,6 +18,21 @@ reminder-only baseline would send on an invoice that ground truth shows is **alr
 - *Secondary metric* (reported separately): **avoidable follow-up** also counts invoices whose
   true blocker is paperwork.
 
+**Stronger benchmark (`evaluation/baselines.ts`).** Besides reminder-only, a *competent rules
+baseline* uses only observable data and no classifier: ledger check, deterministic STRONG bank
+matching (amount + invoice reference), and keyword suppression for payment / dispute / document
+words. The Evaluation page shows wrong chases blocked, unnecessary pauses and avoidable follow-up
+handled for all three, plus which invoices only Resolve (or only the rules) blocked. On seed
+20260921 the rules baseline blocks 8 of 14 with no unnecessary pauses; Resolve blocks 10 of 14 with
+2 unnecessary pauses; its 2 extra blocks come from the deterministic possible-match tier, not the
+classifier. The keyword list and the synthetic messages share an author, so the rules baseline is
+likely optimistic. Resolve's distinct contribution is choosing the next action (dated wait, approved
+plan, routed correction, review) — which the pilot must measure.
+
+**Frozen evaluation snapshot.** The report is rebuilt from the seed on every request, independent of
+any demo state (demo state lives in each browser). `tests/review-fixes.test.ts` checks that demo
+commands cannot change M/N.
+
 Implementation: `evaluation/wrong-chase.ts`. Resolve's decisions come from `createWorld()` on
 the observable book; hidden ground truth (`data/synthetic/ground-truth.ts`) is read only by the
 harness. `tests/ground-truth-isolation.test.ts` fails if `/domain`, `/ai` or `/integrations`
@@ -52,6 +67,11 @@ shows **"Held-out evaluation pending"** and no accuracy figure.
 
 ## 4. Metrics (never a single "AI accuracy")
 
+**Provider failures are not predictions.** A rate-limited, failed or invalid live-model call is
+recorded under `providerErrors`, excluded from every metric and reported separately. Evaluation
+runs the live classifier in *patient* mode, which waits out rate limits (e.g. Groq's free tier
+allows ~2–3 classifications per minute for `openai/gpt-oss-120b`).
+
 - State classification accuracy, using the band-adjusted routing state (NEEDS_REVIEW band → NEEDS_REVIEW).
 - Per-state precision, recall, F1 and a confusion matrix.
 - Amount extraction exact match (set of distinct rupee amounts, including derived remainders).
@@ -62,7 +82,16 @@ shows **"Held-out evaluation pending"** and no accuracy figure.
 ## 5. Relative-date testing
 
 Relative dates are resolved against the **message timestamp** in Asia/Kolkata, never the device
-clock. Required categories: `WEEKDAY`, `TOMORROW_KAL`, `PARSO`, `AFTER_15TH`, `NEXT_FRIDAY`,
+clock.
+
+**Scoring by semantic kind** (`domain/temporal-semantics.ts`): predictions are compared on kind —
+EXACT (EXACT_DATE or RELATIVE_DATE), LOWER_BOUND (AFTER_DATE), RANGE (DATE_RANGE), AMBIGUOUS
+(type AMBIGUOUS or band NEEDS_REVIEW) — and then on the dates that kind carries. So "Monday tak"
+labelled EXACT_DATE by one annotator and RELATIVE_DATE by another is scored on the resolved day.
+This rule was fixed before any held-out evaluation. The same kinds drive the product: only EXACT or
+a RANGE with an explicit deadline can become a promise date; a LOWER_BOUND never silently becomes an
+exact date (a remainder date proposed from "after the 15th" carries `PROPOSED_FROM_LOWER_BOUND` and
+policy requires confirmation). Required categories: `WEEKDAY`, `TOMORROW_KAL`, `PARSO`, `AFTER_15TH`, `NEXT_FRIDAY`,
 `MONTH_BOUNDARY`, `WEEKEND_BOUNDARY` (plus `EXPLICIT_DATE`, `VAGUE`).
 
 Resolution rules (`ai/temporal.ts`):
@@ -93,7 +122,32 @@ Unitless weights, deliberately **not** rupees (`evaluation/cost-matrix.ts`):
 | blocker → other blocker | MODERATE | 2 | wrong workflow |
 | anything → NEEDS_REVIEW | LOW | 1 | only merchant review time |
 
-## 7. Pilot metric
+## 7. Results so far (development set — NOT held out)
+
+| Classifier | State accuracy | Risk-weighted errors | Temporal (kind + date) | Ambiguous → review |
+|---|---|---|---|---|
+| `demo-lexicon-v1` (deterministic, built on these cases) | 47/47 | 0 | 31/31 | 8/8 |
+| `groq:openai/gpt-oss-120b` + frozen `case-classifier-v1` | 36/47 (76.6%) | 21 (3 high) | 20/31 | 5/8 |
+
+The deterministic score reflects that it was developed on these cases. The Groq run is the first
+real-model result: the prompt was **not** edited after seeing it (v1 stays frozen; changes would be
+v2 with a fresh held-out set). Its three high-risk errors route vague/ambiguous replies ("jaldi kar
+denge", "thoda thoda karke denge", "weekend ke baad dekhte hain") to follow-up instead of review.
+Frozen report: `evaluation/published/dev-live.json`.
+
+## 8. Held-out drafting workflow
+
+1. `npm run heldout:draft` — a **different model family** (`qwen/qwen3.8-27b`) drafts candidates
+   blind: the script never imports the classifier prompt or development set
+   (`tests/heldout-independence.test.ts`) and prints only counts.
+2. A person reviews and corrects **every** label in `evaluation/heldout-candidates.json`.
+3. `npm run heldout:promote -- --reviewed-by "Name"` writes `heldout-cases.json`, recording the
+   reviewer and the frozen prompt hash. Refuses to overwrite an existing held-out set.
+4. `npm run eval -- --set heldout --publish` and `npm run eval:live -- --set heldout --publish`.
+
+Real anonymised buyer messages from validation interviews remain the preferred source.
+
+## 9. Pilot metric
 
 **Incremental cash collected within 30 days on invoices escalated after standard reminders
 failed.** Eligible escalated invoices are randomised into a Resolve cohort and a reminder-only

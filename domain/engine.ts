@@ -11,18 +11,22 @@
  */
 import type { ClassifierEvidence, ClassifierInput } from "@/ai/classifier";
 import type { BookBankCredit, BookEvidence, ObservableInvoiceBook } from "./book";
-import { matchCredit } from "./matching";
+import { matchCredit, type MatchResult } from "./matching";
 import { formatINR } from "./money";
 import { DEFAULT_POLICY, evaluateAction, FINANCIAL_OR_DOCUMENT_ACTIONS, policyVersion, type ProposedAction } from "./policy";
 import { applyTransition, openCase, STATE_META, type TransitionRequest } from "./state-machine";
 import { splitInvoice } from "./split";
+import { promiseDeadlineDate } from "./temporal-semantics";
+import { validateUnderstanding } from "./understanding-invariants";
 import { addDays, daysOverdue, formatDate, formatIst, istDate, isOnOrBefore } from "./time";
 import { cancelTimersFor, dueTimers, promiseDeadline, schedule } from "./timers";
 import {
   TEXTUAL_BUYER_EVIDENCE,
   type ActionType,
   type BankFeedEntry,
+  type CaseAssessment,
   type CaseUnderstanding,
+  type DateSource,
   type Evidence,
   type Initiator,
   type InvoiceCase,
@@ -53,6 +57,25 @@ function nextId(w: WorldState, prefix: string): string {
 function log(w: WorldState, text: string): void {
   w.activity.unshift({ at: w.clock, text });
   if (w.activity.length > 300) w.activity.length = 300;
+}
+
+function assess(
+  w: WorldState,
+  c: InvoiceCase,
+  a: Omit<CaseAssessment, "id" | "at" | "state">,
+): CaseAssessment {
+  const rec: CaseAssessment = { ...a, id: nextId(w, "asm"), at: w.clock, state: c.currentState };
+  c.assessments = [...(c.assessments ?? []), rec];
+  return rec;
+}
+
+/** Idempotency: a command with an already-processed key is a no-op. */
+function alreadyProcessed(w: WorldState, key: string | undefined): boolean {
+  if (!key) return false;
+  if (w.processedKeys.includes(key)) return true;
+  w.processedKeys.push(key);
+  if (w.processedKeys.length > 2000) w.processedKeys.splice(0, w.processedKeys.length - 2000);
+  return false;
 }
 
 function getCase(w: WorldState, id: string): InvoiceCase {
@@ -103,7 +126,7 @@ export function recheckPayment(w: WorldState, c: InvoiceCase) {
       !f.assignedTo &&
       !(c.rejectedCreditIds ?? []).includes(f.evidence.id) &&
       f.evidence.structuredExtraction?.kind === "BANK_CREDIT" &&
-      matchCredit(f.evidence.structuredExtraction.data, c).strength === "STRONG",
+      matchCredit(f.evidence.structuredExtraction.data, c).strength !== "NONE",
   );
   return { outstandingAmount: c.outstandingAmount, newPaymentDetected: Boolean(pending), checkedAt: w.clock };
 }
@@ -197,12 +220,7 @@ function onEnterState(w: WorldState, c: InvoiceCase, evidenceIds: string[], ctx?
     case "PAID_UNMATCHED": {
       c.workflow.followUpPaused = true;
       stop();
-      propose(w, c, "MATCH_PAYMENT", {
-        proposedBy: "RULE",
-        summary: "Confirm that the bank credit pays this invoice and reconcile it",
-        evidenceIds,
-        payload: { creditEvidenceId: ctx?.creditEvidenceId, rationale: ctx?.matchRationale ?? [] },
-      });
+      proposeMatch(w, c, ctx?.creditEvidenceId ?? "", ctx?.matchRationale ?? [], evidenceIds);
       break;
     }
     case "PAPERWORK_BLOCKED": {
@@ -238,6 +256,8 @@ function onEnterState(w: WorldState, c: InvoiceCase, evidenceIds: string[], ctx?
       c.workflow.followUpPaused = true;
       stop();
       const p = c.promiseToPay!;
+      c.followUpSuppressedUntil = p.deadlineAt;
+      c.followUpSuppressedReason = `promised ${formatDate(p.promisedDate)} + ${w.policy.promiseGracePeriodHours}h grace`;
       schedule(w.timers, {
         id: nextId(w, "tmr"),
         invoiceId: c.id,
@@ -260,6 +280,7 @@ function onEnterState(w: WorldState, c: InvoiceCase, evidenceIds: string[], ctx?
     case "NEEDS_REVIEW": {
       c.workflow.followUpPaused = true;
       stop();
+      if (ctx?.creditEvidenceId) proposeMatch(w, c, ctx.creditEvidenceId, ctx.matchRationale ?? [], evidenceIds);
       propose(w, c, "REQUEST_HUMAN_REVIEW", {
         proposedBy: "RULE",
         summary: "Ask the merchant to classify this case. No buyer message will be sent until then.",
@@ -285,6 +306,8 @@ function onEnterState(w: WorldState, c: InvoiceCase, evidenceIds: string[], ctx?
       break;
     }
     case "FOLLOW_UP_ACTIVE": {
+      c.followUpSuppressedUntil = undefined;
+      c.followUpSuppressedReason = undefined;
       const a = propose(w, c, "RESUME_FOLLOW_UP", {
         proposedBy: c.transitions.at(-1)?.initiatedBy ?? "RULE",
         summary: "Hand the invoice back to the Receivables Agent for standard follow-up",
@@ -298,6 +321,8 @@ function onEnterState(w: WorldState, c: InvoiceCase, evidenceIds: string[], ctx?
     }
     case "RESOLVED": {
       c.workflow.followUpPaused = true;
+      c.followUpSuppressedUntil = undefined;
+      c.followUpSuppressedReason = undefined;
       cancelTimersFor(w.timers, c.id, "Invoice resolved");
       break;
     }
@@ -359,17 +384,26 @@ function planFromUnderstanding(w: WorldState, c: InvoiceCase, sourceEvidenceId: 
   // The remainder's date is the expression that is NOT "today" (e.g. "15 ke baad" in "₹90K aaj, baaki 15 ke baad").
   const t = u?.temporalExpressions.find((x) => x.type !== "AMBIGUOUS" && x.normalizedDate !== msgDate);
   let remainderDate: string | undefined;
-  if (t?.type === "AFTER_DATE" && t.lowerBound) remainderDate = addDays(t.lowerBound, 1);
-  else if (t?.type === "DATE_RANGE" && t.upperBound) remainderDate = t.upperBound;
-  else if (t?.normalizedDate && t.normalizedDate !== msgDate) remainderDate = t.normalizedDate;
+  let source: DateSource = "MISSING";
+  if (t?.type === "AFTER_DATE" && t.lowerBound) {
+    remainderDate = addDays(t.lowerBound, 1);
+    source = "PROPOSED_FROM_LOWER_BOUND";
+  } else if (t?.type === "DATE_RANGE" && t.upperBound) {
+    remainderDate = t.upperBound;
+    source = "RANGE_UPPER_BOUND";
+  } else if (t?.normalizedDate && t.normalizedDate !== msgDate) {
+    remainderDate = t.normalizedDate;
+    source = "EXACT";
+  }
   const firstDate = istDate(w.clock) > msgDate ? istDate(w.clock) : msgDate;
   const installments = [] as PaymentPlan["installments"];
   if (immediate && immediate < c.outstandingAmount) {
-    installments.push({ id: nextId(w, "inst"), amount: immediate, dueDate: firstDate, status: "PENDING" });
+    installments.push({ id: nextId(w, "inst"), amount: immediate, dueDate: firstDate, dateSource: "MESSAGE_DATE", status: "PENDING" });
     installments.push({
       id: nextId(w, "inst"),
       amount: c.outstandingAmount - immediate,
       dueDate: remainderDate ?? "",
+      dateSource: source,
       status: "PENDING",
     });
   }
@@ -396,6 +430,7 @@ function proposePartPayment(w: WorldState, c: InvoiceCase, evidenceIds: string[]
     proposal: {
       immediateAmount: first?.amount,
       finalDate: second?.dueDate || undefined,
+      finalDateSource: second?.dateSource,
       buyerMessage: first
         ? `Hi, as discussed, here is a payment link for ${c.invoiceNumber}. You can pay ${formatINR(first.amount)} now and the balance of ${formatINR(second.amount)} by ${second.dueDate ? formatDate(second.dueDate, false) : "the agreed date"}. Thank you.`
         : undefined,
@@ -427,6 +462,11 @@ function classifierInputFor(c: InvoiceCase, primary: Evidence): ClassifierInput 
 
 function ingestMut(w: WorldState, ctx: EngineContext, caseId: string, e: BookEvidence, understanding?: CaseUnderstanding) {
   const c = getCase(w, caseId);
+  const pid = e.structuredExtraction?.kind === "PAYMENT_EVENT" ? e.structuredExtraction.data.paymentId : undefined;
+  if (pid && c.evidence.some((x) => x.structuredExtraction?.kind === "PAYMENT_EVENT" && x.structuredExtraction.data.paymentId === pid)) {
+    log(w, `${c.invoiceNumber}: duplicate payment event ${pid} ignored`);
+    return undefined;
+  }
   const ev = addEvidence(w, c, e);
   log(w, `${c.invoiceNumber}: new evidence — ${ev.source}`);
   if (c.currentState === "RESOLVED") return ev;
@@ -479,10 +519,33 @@ function applyUnderstanding(w: WorldState, c: InvoiceCase, u: CaseUnderstanding,
     target = "NEEDS_REVIEW";
     reasonCode = "LOW_CONFIDENCE_OR_AMBIGUOUS";
   }
+  // Deterministic financial consistency gate — applies to demo and live model output alike.
+  const issues = validateUnderstanding(u, c);
+  if (issues.length) {
+    u.validationIssues = issues;
+    target = "NEEDS_REVIEW";
+    reasonCode = issues[0].code;
+    reason = `${u.conciseExplanation} ${issues.map((i) => i.message).join(" ")}`;
+    if (u.proposedState !== "NEEDS_REVIEW") candidates.add(u.proposedState);
+  }
   candidates.delete("NEEDS_REVIEW");
   candidates.delete("RESOLVED");
 
+  const imsCorroborates = c.evidence.some((e) => e.type === "IMS_IMPORT" && evidenceIds.includes(e.id));
+  const strength: CaseAssessment["evidenceStrength"] = imsCorroborates || evidenceIds.length > 1 ? "CORROBORATED" : "SINGLE_SOURCE";
+
   if (target === state) {
+    assess(w, c, {
+      kind: issues.length ? "INVARIANT_FAILED" : trigger?.type === "IMS_IMPORT" ? "CORROBORATED" : "UPDATED",
+      confidenceBand: u.confidenceBand,
+      evidenceStrength: strength,
+      evidenceIds,
+      summary:
+        trigger?.type === "IMS_IMPORT"
+          ? `Assessment updated — corroborating IMS evidence received. State unchanged (${STATE_META[state].label}).`
+          : `Assessment updated from new evidence. State unchanged (${STATE_META[state].label}).`,
+      provider: u.provider,
+    });
     // New corroborating evidence (e.g. an IMS import) refreshes an unapproved correction draft.
     if (state === "PAPERWORK_BLOCKED" && c.workflow?.correction?.status === "DRAFTED") {
       const draft = correctionDraft(c);
@@ -499,6 +562,7 @@ function applyUnderstanding(w: WorldState, c: InvoiceCase, u: CaseUnderstanding,
     return;
   }
   if (target === "FOLLOW_UP_ACTIVE") {
+    assess(w, c, { kind: "UPDATED", confidenceBand: u.confidenceBand, evidenceStrength: strength, evidenceIds, summary: "No blocker found in the new evidence — standard follow-up continues.", provider: u.provider });
     log(w, `${c.invoiceNumber}: no blocker found — standard follow-up continues`);
     return;
   }
@@ -531,6 +595,14 @@ function applyUnderstanding(w: WorldState, c: InvoiceCase, u: CaseUnderstanding,
     }
     if (target === "NEEDS_REVIEW") c.reviewCandidates = Array.from(candidates);
     transition(w, c, { ...common, to: target, reasonCode, humanReadableReason: reason });
+    assess(w, c, {
+      kind: issues.length ? "INVARIANT_FAILED" : "INITIAL",
+      confidenceBand: issues.length ? "NEEDS_REVIEW" : u.confidenceBand,
+      evidenceStrength: strength,
+      evidenceIds,
+      summary: issues.length ? `Held for review: ${issues[0].message}` : `Initial assessment: ${u.conciseExplanation}`,
+      provider: u.provider,
+    });
     onEnterState(w, c, evidenceIds);
     return;
   }
@@ -544,6 +616,7 @@ function applyUnderstanding(w: WorldState, c: InvoiceCase, u: CaseUnderstanding,
       reasonCode: "CONFLICTING_EVIDENCE",
       humanReadableReason: `New evidence suggests ${STATE_META[target].label.toLowerCase()} but the case is ${STATE_META[state].label.toLowerCase()}. ${u.conciseExplanation}`,
     });
+    assess(w, c, { kind: "CONFLICT", confidenceBand: "NEEDS_REVIEW", evidenceStrength: "CONFLICTING", evidenceIds, summary: "New evidence conflicts with the current blocker — held for review.", provider: u.provider });
     onEnterState(w, c, evidenceIds);
   } else if (state === "NEEDS_REVIEW") {
     c.reviewCandidates = Array.from(new Set([...(c.reviewCandidates ?? []), ...candidates]));
@@ -551,20 +624,25 @@ function applyUnderstanding(w: WorldState, c: InvoiceCase, u: CaseUnderstanding,
 }
 
 function promiseDateFrom(u: CaseUnderstanding): { date: string; precision: "DAY" | "DEADLINE" } | undefined {
-  const t = u.temporalExpressions.find((x) => x.confidenceBand === "HIGH" && (x.normalizedDate || x.upperBound));
-  if (!t) return undefined;
-  if (t.type === "AFTER_DATE") return undefined; // "15 ke baad" is not an exact promise date
-  if (t.normalizedDate) return { date: t.normalizedDate, precision: t.type === "EXACT_DATE" ? "DEADLINE" : "DAY" };
-  return { date: t.upperBound!, precision: "DEADLINE" };
+  // Only an EXACT day or a RANGE with an explicit deadline; a lower bound ("15 ke baad") never becomes a promise date.
+  for (const t of u.temporalExpressions) {
+    const d = promiseDeadlineDate(t);
+    if (d) return d;
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
 // bank matching (deterministic rule)
 
-function assignCredit(w: WorldState, c: InvoiceCase, entry: BankFeedEntry, rationale: string[]) {
+function attachCredit(c: InvoiceCase, entry: BankFeedEntry) {
   entry.assignedTo = c.id;
   entry.evidence.invoiceId = c.id;
-  c.evidence.push(entry.evidence);
+  if (!c.evidence.some((e) => e.id === entry.evidence.id)) c.evidence.push(entry.evidence);
+}
+
+function assignStrong(w: WorldState, c: InvoiceCase, entry: BankFeedEntry, rationale: string[]) {
+  attachCredit(c, entry);
   if (c.currentState === "RESOLVED" || c.currentState === "PAID_UNMATCHED") return;
   transition(w, c, {
     to: "PAID_UNMATCHED",
@@ -577,41 +655,89 @@ function assignCredit(w: WorldState, c: InvoiceCase, entry: BankFeedEntry, ratio
   onEnterState(w, c, [entry.evidence.id], { creditEvidenceId: entry.evidence.id, matchRationale: rationale });
 }
 
-function strongCandidates(w: WorldState, entry: BankFeedEntry): { c: InvoiceCase; rationale: string[] }[] {
+/** POSSIBLE match: never treated as paid. Pauses contact and asks the merchant. */
+function assignPossible(w: WorldState, c: InvoiceCase, entry: BankFeedEntry, rationale: string[]) {
+  attachCredit(c, entry);
+  if (c.currentState === "RESOLVED" || c.currentState === "PAID_UNMATCHED") return;
+  const why = `Possible match only: ${rationale.join("; ")}. Without an invoice reference this credit could belong to another invoice.`;
+  if (c.currentState === "NEEDS_REVIEW") {
+    c.reviewCandidates = Array.from(new Set([...(c.reviewCandidates ?? []), "PAID_UNMATCHED" as InvoiceState, "FOLLOW_UP_ACTIVE" as InvoiceState]));
+    proposeMatch(w, c, entry.evidence.id, rationale, [entry.evidence.id]);
+    return;
+  }
+  c.reviewCandidates = ["PAID_UNMATCHED", "FOLLOW_UP_ACTIVE"];
+  transition(w, c, {
+    to: "NEEDS_REVIEW",
+    initiatedBy: "RULE",
+    triggerType: "BANK_MATCH",
+    evidenceIds: [entry.evidence.id],
+    reasonCode: "POSSIBLE_BANK_MATCH",
+    humanReadableReason: why,
+  });
+  onEnterState(w, c, [entry.evidence.id], { creditEvidenceId: entry.evidence.id, matchRationale: rationale });
+}
+
+function proposeMatch(w: WorldState, c: InvoiceCase, creditEvidenceId: string, rationale: string[], evidenceIds: string[]) {
+  return propose(w, c, "MATCH_PAYMENT", {
+    proposedBy: "RULE",
+    summary: "Confirm that the bank credit pays this invoice and reconcile it",
+    evidenceIds,
+    payload: { creditEvidenceId, rationale },
+  });
+}
+
+function matchCandidates(w: WorldState, entry: BankFeedEntry): { c: InvoiceCase; m: MatchResult; rationale: string[] }[] {
   if (entry.evidence.structuredExtraction?.kind !== "BANK_CREDIT") return [];
   const credit = entry.evidence.structuredExtraction.data;
-  const out: { c: InvoiceCase; rationale: string[] }[] = [];
+  const out: { c: InvoiceCase; m: MatchResult; rationale: string[] }[] = [];
   for (const id of w.caseOrder) {
     const c = w.cases[id];
     if (c.currentState === "RESOLVED" || c.outstandingAmount <= 0) continue;
     if ((c.rejectedCreditIds ?? []).includes(entry.evidence.id)) continue;
     const m = matchCredit(credit, c);
-    if (m.strength === "STRONG") out.push({ c, rationale: m.rationale.filter((r, i) => i < 3) });
+    if (m.strength !== "NONE") out.push({ c, m, rationale: m.rationale.filter((_, i) => i < 3) });
   }
   return out;
+}
+
+/** Deterministic assignment: one STRONG → paid-unmatched; else one POSSIBLE → review; else leave unassigned. */
+function assignEntry(w: WorldState, entry: BankFeedEntry, onlyCase?: InvoiceCase): boolean {
+  const cands = matchCandidates(w, entry);
+  const strong = cands.filter((x) => x.m.strength === "STRONG");
+  const possible = cands.filter((x) => x.m.strength === "POSSIBLE");
+  const pick = strong.length === 1 ? { ...strong[0], tier: "STRONG" as const } : strong.length === 0 && possible.length === 1 ? { ...possible[0], tier: "POSSIBLE" as const } : null;
+  if (!pick) {
+    if (!onlyCase && cands.length > 1) log(w, `Bank credit ${entry.evidence.rawContent} matches ${cands.length} invoices — left unassigned`);
+    return false;
+  }
+  if (onlyCase && pick.c.id !== onlyCase.id) return false;
+  if (pick.tier === "STRONG") assignStrong(w, pick.c, entry, pick.rationale);
+  else assignPossible(w, pick.c, entry, pick.rationale);
+  return true;
 }
 
 function runMatchingForCase(w: WorldState, c: InvoiceCase) {
   for (const entry of w.bankFeed) {
     if (entry.assignedTo) continue;
-    const cands = strongCandidates(w, entry);
-    if (cands.length === 1 && cands[0].c.id === c.id) {
-      assignCredit(w, c, entry, cands[0].rationale);
-      return;
-    }
+    if (assignEntry(w, entry, c)) return;
   }
 }
 
 function runMatching(w: WorldState) {
   for (const entry of w.bankFeed) {
     if (entry.assignedTo) continue;
-    const cands = strongCandidates(w, entry);
-    if (cands.length === 1) assignCredit(w, cands[0].c, entry, cands[0].rationale);
-    else if (cands.length > 1) log(w, `Bank credit ${entry.evidence.rawContent} matches ${cands.length} invoices — left unassigned`);
+    assignEntry(w, entry);
   }
 }
 
 function receiveCreditMut(w: WorldState, credit: BookBankCredit, runMatch: boolean) {
+  const dup = w.bankFeed.some(
+    (f) => f.evidence.structuredExtraction?.kind === "BANK_CREDIT" && f.evidence.structuredExtraction.data.bankTxnId === credit.data.bankTxnId,
+  );
+  if (dup) {
+    log(w, `Duplicate bank credit ${credit.data.bankTxnId} ignored`);
+    return;
+  }
   const ev: Evidence = {
     id: nextId(w, "ev"),
     invoiceId: "",
@@ -646,8 +772,13 @@ function settlePromise(w: WorldState, c: InvoiceCase, paidAt: string | undefined
 function processPayment(w: WorldState, c: InvoiceCase, ev: Evidence) {
   if (ev.structuredExtraction?.kind !== "PAYMENT_EVENT") return;
   const amt = ev.structuredExtraction.data.amount;
-  c.outstandingAmount = Math.max(0, c.outstandingAmount - amt);
+  if (!(amt > 0)) return;
+  const before = c.outstandingAmount;
+  c.outstandingAmount = Math.max(0, before - amt);
   log(w, `${c.invoiceNumber}: payment of ${formatINR(amt)} recorded (${ev.source})`);
+  if (amt > before) {
+    systemNote(w, c, "Resolve payment accounting", `Payment of ${formatINR(amt)} exceeds the ${formatINR(before)} outstanding by ${formatINR(amt - before)}. Excess flagged for Accounts; outstanding floored at ₹0.`);
+  }
 
   const plan = c.paymentPlan;
   if (plan && plan.status === "ACTIVE") {
@@ -661,6 +792,11 @@ function processPayment(w: WorldState, c: InvoiceCase, ev: Evidence) {
       }
     }
     if (plan.installments.every((i) => i.status === "PAID")) plan.status = "COMPLETED";
+    const next = plan.installments.find((i) => i.status === "PENDING");
+    if (next) {
+      c.followUpSuppressedUntil = promiseDeadline(next.dueDate, w.policy.promiseGracePeriodHours);
+      c.followUpSuppressedReason = `next installment ${formatINR(next.amount)} due ${formatDate(next.dueDate)} + grace`;
+    }
   }
   if (c.outstandingAmount <= 0) {
     settlePromise(w, c, ev.timestamp);
@@ -775,6 +911,7 @@ export function createWorld(book: ObservableInvoiceBook, ctx: EngineContext, opt
     buyers: Object.fromEntries(book.buyers.map((b) => [b.buyerId, structuredClone(b)])),
     bankFeed: [],
     idCounter: 0,
+    processedKeys: [],
     activity: [],
   };
 
@@ -872,23 +1009,40 @@ export function receiveBankCredit(w: WorldState, credit: BookBankCredit, runMatc
   return mutate(w, (d) => receiveCreditMut(d, credit, runMatch));
 }
 
-export function simulatePayment(w: WorldState, caseId: string, amount: number, note = "Simulated payment event"): WorldState {
+export function simulatePayment(
+  w: WorldState,
+  caseId: string,
+  amount: number,
+  opts: { note?: string; paymentId?: string; channel?: "SIMULATED" | "MERCHANT_LEDGER" } = {},
+): WorldState {
   return mutate(w, (d) => {
     const c = getCase(d, caseId);
+    const paymentId = opts.paymentId ?? `pay_sim_${d.idCounter + 1}`;
+    if (c.evidence.some((x) => x.structuredExtraction?.kind === "PAYMENT_EVENT" && x.structuredExtraction.data.paymentId === paymentId)) {
+      return; // idempotent: the same payment event is never applied twice
+    }
+    const merchant = opts.channel === "MERCHANT_LEDGER";
     const link = c.paymentPlan?.paymentLink;
     const ev = addEvidence(d, c, {
       type: "PAYMENT_EVENT",
       timestamp: d.clock,
-      source: note,
-      rawContent: `${formatINR(amount)} received${link ? ` via ${link.mode === "TEST_MODE" ? "test-mode" : "simulated"} payment link ${link.id}` : ""}. SIMULATED — no real money moved.`,
+      source: opts.note ?? (merchant ? "Merchant-confirmed payment (ledger)" : "Simulated payment event"),
+      rawContent: merchant
+        ? `${formatINR(amount)} confirmed received by the merchant in their ledger.`
+        : `${formatINR(amount)} received${link ? ` via ${link.mode === "TEST_MODE" ? "test-mode" : "simulated"} payment link ${link.id}` : ""}. SIMULATED — no real money moved.`,
       structuredExtraction: {
         kind: "PAYMENT_EVENT",
-        data: { amount, channel: "SIMULATED", reference: link?.id ?? c.invoiceNumber, reconciled: true },
+        data: { amount, channel: opts.channel ?? "SIMULATED", paymentId, reference: link?.id ?? c.invoiceNumber, reconciled: true },
       },
-      isSynthetic: true,
+      isSynthetic: !merchant,
     });
     if (c.currentState !== "RESOLVED") processPayment(d, c, ev);
   });
+}
+
+/** Merchant confirms from their own ledger that the buyer paid (e.g. resolving a "we already paid" review). */
+export function recordMerchantPayment(w: WorldState, caseId: string, amount: number, idempotencyKey?: string): WorldState {
+  return simulatePayment(w, caseId, amount, { channel: "MERCHANT_LEDGER", paymentId: idempotencyKey ?? `ledger_${caseId}_${amount}` });
 }
 
 function merchantEvidence(d: WorldState, c: InvoiceCase, text: string, chosen: InvoiceState, from?: InvoiceState) {
@@ -903,6 +1057,9 @@ function merchantEvidence(d: WorldState, c: InvoiceCase, text: string, chosen: I
 }
 
 export function approveAction(w: WorldState, actionId: string, approver = "Merchant (demo)"): WorldState {
+  const existing = w.actions[actionId];
+  // Idempotent: approving an action that is already approved / executed is a no-op.
+  if (existing && ["APPROVED", "EXECUTING", "EXECUTED"].includes(existing.status)) return w;
   return mutate(w, (d) => {
     const a = d.actions[actionId];
     if (!a) throw new EngineError("Unknown action");
@@ -910,6 +1067,24 @@ export function approveAction(w: WorldState, actionId: string, approver = "Merch
       throw new EngineError(`Action is ${a.status}; only proposed actions can be approved`);
     }
     const c = getCase(d, a.invoiceId);
+    // Policy may have changed since the proposal: never approve against a stale evaluation.
+    if (a.policyEvaluation.policyVersion !== policyVersion(d.policy)) {
+      const plan = c.paymentPlan;
+      const fresh = evaluate(d, c, {
+        type: a.type,
+        immediateAmount: a.type === "CREATE_PART_PAYMENT_LINK" ? plan?.installments[0]?.amount : undefined,
+        finalDate: a.type === "CREATE_PART_PAYMENT_LINK" ? plan?.installments[1]?.dueDate || undefined : undefined,
+        finalDateSource: a.type === "CREATE_PART_PAYMENT_LINK" ? plan?.installments[1]?.dateSource : undefined,
+      });
+      const was = a.policyEvaluation.policyVersion;
+      a.policyEvaluation = fresh;
+      if (fresh.decision === "BLOCK") {
+        a.status = "BLOCKED";
+        a.result = `Not approved: policy changed (${was} → ${fresh.policyVersion}) and the action is now outside policy — ${fresh.checks.filter((x) => !x.passed && x.severity === "BLOCK").map((x) => x.label).join("; ")}`;
+        log(d, `${c.invoiceNumber}: approval refused — policy changed since proposal`);
+        return;
+      }
+    }
     a.status = "APPROVED";
     a.approvedBy = approver;
     log(d, `${c.invoiceNumber}: ${a.type} approved by ${approver}`);
@@ -919,6 +1094,7 @@ export function approveAction(w: WorldState, actionId: string, approver = "Merch
       const entry = d.bankFeed.find((f) => f.evidence.id === creditId);
       const credit = entry?.evidence.structuredExtraction?.kind === "BANK_CREDIT" ? entry.evidence.structuredExtraction.data : undefined;
       if (!entry || !credit) throw new EngineError("Matched credit not found");
+      if (entry.reconciled) throw new EngineError("This bank credit is already reconciled");
       entry.reconciled = true;
       c.outstandingAmount = Math.max(0, c.outstandingAmount - credit.amount);
       settlePromise(d, c, credit.valueDate);
@@ -974,6 +1150,8 @@ export function approveAction(w: WorldState, actionId: string, approver = "Merch
 }
 
 export function rejectAction(w: WorldState, actionId: string, reason = "Rejected by merchant"): WorldState {
+  const existing = w.actions[actionId];
+  if (existing && existing.status === "CANCELLED") return w; // idempotent
   return mutate(w, (d) => {
     const a = d.actions[actionId];
     if (!a || !OPEN_ACTION.includes(a.status)) throw new EngineError("Only open actions can be rejected");
@@ -1029,8 +1207,8 @@ export function editPartPaymentPlan(
     const plan = c.paymentPlan!;
     const firstDate = plan.installments[0]?.dueDate || istDate(d.clock);
     plan.installments = [
-      { id: nextId(d, "inst"), amount: edit.immediateAmount, dueDate: firstDate, status: "PENDING" },
-      { id: nextId(d, "inst"), amount: c.outstandingAmount - edit.immediateAmount, dueDate: edit.remainderDate, status: "PENDING" },
+      { id: nextId(d, "inst"), amount: edit.immediateAmount, dueDate: firstDate, dateSource: "MERCHANT_SET", status: "PENDING" },
+      { id: nextId(d, "inst"), amount: c.outstandingAmount - edit.immediateAmount, dueDate: edit.remainderDate, dateSource: "MERCHANT_SET", status: "PENDING" },
     ];
     plan.status = "PROPOSED";
     a.status = "CANCELLED";
@@ -1055,6 +1233,7 @@ export function beginExecution(w: WorldState, actionId: string): WorldState {
       type: a.type,
       immediateAmount: plan?.installments[0]?.amount,
       finalDate: plan?.installments[1]?.dueDate || undefined,
+      finalDateSource: plan?.installments[1]?.dateSource,
     });
     const blocking = pe.checks.filter((x) => !x.passed && x.severity === "BLOCK");
     a.policyEvaluation = pe;
@@ -1070,6 +1249,7 @@ export function beginExecution(w: WorldState, actionId: string): WorldState {
 }
 
 export function completePaymentLink(w: WorldState, actionId: string, link: PaymentLinkRecord): WorldState {
+  if (w.actions[actionId]?.status === "EXECUTED") return w; // idempotent retry
   return mutate(w, (d) => {
     const a = d.actions[actionId];
     if (!a || a.status !== "EXECUTING") throw new EngineError("Action is not executing");
@@ -1088,6 +1268,11 @@ export function completePaymentLink(w: WorldState, actionId: string, link: Payme
         createdAt: d.clock,
       });
     }
+    const first = plan.installments.find((i) => i.status === "PENDING");
+    if (first) {
+      c.followUpSuppressedUntil = promiseDeadline(first.dueDate, d.policy.promiseGracePeriodHours);
+      c.followUpSuppressedReason = `installment ${formatINR(first.amount)} due ${formatDate(first.dueDate)} + grace`;
+    }
     a.status = "EXECUTED";
     a.executedAt = d.clock;
     a.result = `${link.mode === "TEST_MODE" ? "Razorpay test-mode" : "Simulated"} payment link ${link.id} created (${link.shortUrl})`;
@@ -1105,6 +1290,7 @@ export function failExecution(w: WorldState, actionId: string, error: string): W
 }
 
 export function markCorrectionIssued(w: WorldState, caseId: string): WorldState {
+  if (w.cases[caseId]?.workflow?.correction?.status === "ISSUED") return w; // idempotent
   return mutate(w, (d) => {
     const c = getCase(d, caseId);
     if (c.currentState !== "PAPERWORK_BLOCKED") throw new EngineError("Case is not paperwork-blocked");
@@ -1138,9 +1324,11 @@ export function classifyCase(
   w: WorldState,
   caseId: string,
   chosen: InvoiceState,
-  opts: { note?: string; promiseDate?: string } = {},
+  opts: { note?: string; promiseDate?: string; idempotencyKey?: string } = {},
 ): WorldState {
+  if (opts.idempotencyKey && w.processedKeys.includes(opts.idempotencyKey)) return w;
   return mutate(w, (d) => {
+    alreadyProcessed(d, opts.idempotencyKey);
     const c = getCase(d, caseId);
     const aiProposed = c.understanding?.proposedState;
     const from = c.currentState;
@@ -1203,6 +1391,7 @@ export function updatePolicy(w: WorldState, patch: Partial<Omit<MerchantPolicy, 
         type: a.type,
         immediateAmount: a.type === "CREATE_PART_PAYMENT_LINK" ? plan?.installments[0]?.amount : undefined,
         finalDate: a.type === "CREATE_PART_PAYMENT_LINK" ? plan?.installments[1]?.dueDate || undefined : undefined,
+        finalDateSource: a.type === "CREATE_PART_PAYMENT_LINK" ? plan?.installments[1]?.dateSource : undefined,
       });
       a.policyEvaluation = pe;
       a.status = pe.decision === "BLOCK" ? "BLOCKED" : "REVIEW_REQUIRED";
